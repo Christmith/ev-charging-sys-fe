@@ -1,0 +1,172 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* EV Charging System Design Tokens - Light Theme */
+    --background: 220 4% 93%; /* #EBEBEB */
+    --foreground: 44 8% 20%; /* #212221 charcoal */
+
+    --card: 0 0% 100%;
+    --card-foreground: 44 8% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 44 8% 20%;
+
+    /* Primary: Charcoal */
+    --primary: 44 8% 20%; /* #212221 */
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Lime accent */
+    --secondary: 80 95% 50%; /* #CBF50E */
+    --secondary-foreground: 44 8% 20%;
+
+    --muted: 30 6% 60%; /* #9B9A98 */
+    --muted-foreground: 40 10% 38%; /* #616252 */
+
+    --accent: 80 95% 50%; /* #CBF50E */
+    --accent-foreground: 44 8% 20%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 13% 87%;
+    --input: 220 13% 91%;
+    --ring: 80 95% 50%; /* lime focus ring */
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 44 8% 20%;
+
+    --radius: 0.75rem; /* 12px */
+
+    /* Sidebar tokens */
+    --sidebar-background: 44 8% 20%; /* Dark sidebar */
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 80 95% 50%;
+    --sidebar-primary-foreground: 44 8% 20%;
+    --sidebar-accent: 0 0% 100% / 0.1;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 100% / 0.1;
+    --sidebar-ring: 80 95% 50%;
+
+    /* Custom gradients and effects */
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--muted)));
+    --gradient-accent: linear-gradient(135deg, hsl(var(--accent)), hsl(80 95% 40%));
+    --shadow-elegant: 0 10px 30px -10px hsl(var(--primary) / 0.3);
+    --shadow-glow: 0 0 40px hsl(var(--accent) / 0.4);
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    /* Dark theme - charcoal background with lime accents */
+    --background: 44 8% 20%; /* #212221 */
+    --foreground: 0 0% 100%;
+
+    --card: 44 8% 25%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 44 8% 25%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 0 0% 100%;
+    --primary-foreground: 44 8% 20%;
+
+    --secondary: 80 95% 50%; /* Keep lime accent */
+    --secondary-foreground: 44 8% 20%;
+
+    --muted: 30 6% 30%;
+    --muted-foreground: 30 6% 60%;
+
+    --accent: 80 95% 50%;
+    --accent-foreground: 44 8% 20%;
+
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 100% / 0.1;
+    --input: 0 0% 100% / 0.1;
+    --ring: 80 95% 50%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Sidebar - even darker */
+    --sidebar-background: 44 8% 15%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 80 95% 50%;
+    --sidebar-primary-foreground: 44 8% 20%;
+    --sidebar-accent: 0 0% 100% / 0.1;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 100% / 0.1;
+    --sidebar-ring: 80 95% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* Custom scrollbars */
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-muted/30;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground;
+  }
+
+  /* Focus styles */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background;
+  }
+
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideIn {
+    from { 
+      opacity: 0;
+      transform: translateY(1rem);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
