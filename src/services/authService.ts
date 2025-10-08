@@ -27,12 +27,13 @@ class AuthService {
 
       // Create user object from API response
       const user: WebUser = {
-        fullName: data.fullName || "Station User",
+        fullName:
+          data.fullName.split(" ").slice(0, 2).join(" ") || "Station User",
         email: credentials.email, // Store email from credentials
         role: (data.role === "Backoffice"
           ? "BackOffice"
           : data.role) as UserRole,
-        assignedStation: data.assignedStation, // Only present for StationOperator
+        assignedStationId: data.assignedStationId, // Only present for StationOperator
       };
 
       return { token: data.token, user };

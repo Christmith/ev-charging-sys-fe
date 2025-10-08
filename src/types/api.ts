@@ -3,7 +3,7 @@ export interface LoginResponse {
   token: string;
   role: string;
   fullName: string;
-  assignedStation?: string; // Object ID for StationOperator role
+  assignedStationId?: string; // Object ID for StationOperator role
 }
 
 // export interface RefreshTokenResponse {

@@ -4,7 +4,7 @@ export interface WebUser {
   fullName: string;
   email: string; // Store email from credentials
   role: UserRole;
-  assignedStation?: string; // Object ID for StationOperator role
+  assignedStationId?: string; // Object ID for StationOperator role
 }
 
 export interface AuthContextType {
