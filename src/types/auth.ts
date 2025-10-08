@@ -1,17 +1,10 @@
-export type UserRole = "BackOffice" | "StationOperator" | "EVOwner";
+export type UserRole = "BackOffice" | "StationOperator";
 
 export interface WebUser {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone?: string;
+  fullName: string;
+  email: string; // Store email from credentials
   role: UserRole;
-  assignedStationIds?: string[];
-  status: "ACTIVE" | "DISABLED";
-  lastLoginAt?: string;
-  createdAt: string;
-  updatedAt: string;
+  assignedStation?: string; // Object ID for StationOperator role
 }
 
 export interface AuthContextType {
@@ -29,4 +22,8 @@ export interface LoginRequest {
 export interface LoginResponse {
   token: string;
   user: WebUser;
+}
+
+export interface StoredCredentials {
+  email: string;
 }

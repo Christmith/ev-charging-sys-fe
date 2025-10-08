@@ -2,22 +2,20 @@
 export interface LoginResponse {
   token: string;
   role: string;
-  id?: string;
-  firstName?: string;
-  lastName?: string;
-  email?: string;
+  fullName: string;
+  assignedStation?: string; // Object ID for StationOperator role
 }
 
-export interface RefreshTokenResponse {
-  token: string;
-  user: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    role: string;
-  };
-}
+// export interface RefreshTokenResponse {
+//   token: string;
+//   user: {
+//     id: string;
+//     firstName: string;
+//     lastName: string;
+//     email: string;
+//     role: string;
+//   };
+// }
 
 export interface ApiError {
   message: string;
