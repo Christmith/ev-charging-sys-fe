@@ -180,11 +180,16 @@ export function AppSidebar() {
               Logged in as
             </div>
             <div className="text-sm text-sidebar-foreground font-medium">
-              {user.firstName} {user.lastName}
+              {user.fullName}
             </div>
             <div className="text-xs text-sidebar-foreground/60">
               {user.role}
             </div>
+            {user.role === "StationOperator" && user.assignedStation && (
+              <div className="text-xs text-sidebar-foreground/60 mt-1">
+                Station: {user.assignedStation}
+              </div>
+            )}
           </div>
         )}
       </SidebarContent>
