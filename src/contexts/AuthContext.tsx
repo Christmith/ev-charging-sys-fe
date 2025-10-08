@@ -35,12 +35,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       const { token, user } = await AuthService.login({ email, password });
 
-      AuthService.storeAuth(token, user);
+      const credentials = { email };
+      AuthService.storeAuth(token, user, credentials);
       setUser(user);
 
       toast({
         title: "Welcome back!",
-        description: `Logged in as ${user.firstName} ${user.lastName}`,
+        description: `Logged in as ${user.fullName}`,
       });
     } catch (error) {
       toast({

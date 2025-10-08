@@ -1,10 +1,16 @@
 import api from "./api";
-import { WebUser, LoginRequest, UserRole } from "@/types/auth";
+import {
+  WebUser,
+  LoginRequest,
+  UserRole,
+  StoredCredentials,
+} from "@/types/auth";
 import { LoginResponse } from "@/types/api";
 
 class AuthService {
   private static TOKEN_KEY = "ev_system_token";
   private static USER_KEY = "ev_system_user";
+  private static CREDENTIALS_KEY = "ev_system_credentials";
 
   /**
    * Login user with email and password
@@ -21,16 +27,12 @@ class AuthService {
 
       // Create user object from API response
       const user: WebUser = {
-        id: data.id || "unknown",
-        firstName: data.firstName || "User",
-        lastName: data.lastName || "",
-        email: credentials.email,
+        fullName: data.fullName || "Station User",
+        email: credentials.email, // Store email from credentials
         role: (data.role === "Backoffice"
           ? "BackOffice"
           : data.role) as UserRole,
-        status: "ACTIVE",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        assignedStation: data.assignedStation, // Only present for StationOperator
       };
 
       return { token: data.token, user };
@@ -55,11 +57,24 @@ class AuthService {
   }
 
   /**
+   * Get stored credentials from localStorage
+   */
+  static getStoredCredentials(): StoredCredentials | null {
+    const credentialsJson = localStorage.getItem(this.CREDENTIALS_KEY);
+    return credentialsJson ? JSON.parse(credentialsJson) : null;
+  }
+
+  /**
    * Store authentication data in localStorage
    */
-  static storeAuth(token: string, user: WebUser): void {
+  static storeAuth(
+    token: string,
+    user: WebUser,
+    credentials: StoredCredentials
+  ): void {
     localStorage.setItem(this.TOKEN_KEY, token);
     localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+    localStorage.setItem(this.CREDENTIALS_KEY, JSON.stringify(credentials));
   }
 
   /**
@@ -68,6 +83,7 @@ class AuthService {
   static clearAuth(): void {
     localStorage.removeItem(this.TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
+    localStorage.removeItem(this.CREDENTIALS_KEY);
   }
 
   /**
@@ -101,29 +117,29 @@ class AuthService {
   /**
    * Refresh token (if your API supports it)
    */
-  static async refreshToken(): Promise<{ token: string; user: WebUser }> {
-    try {
-      const response = await api.post("/auth/refresh");
-      const data = response.data;
+  // static async refreshToken(): Promise<{ token: string; user: WebUser }> {
+  //   try {
+  //     const response = await api.post("/auth/refresh");
+  //     const data = response.data;
 
-      const user: WebUser = {
-        id: data.id || "unknown",
-        firstName: data.firstName || "User",
-        lastName: data.lastName || "",
-        email: data.email || "",
-        role: (data.role === "Backoffice"
-          ? "BackOffice"
-          : data.role) as UserRole,
-        status: "ACTIVE",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+  //     // Get stored credentials to maintain email
+  //     const storedCredentials = this.getStoredCredentials();
+  //     const storedUser = this.getStoredUser();
 
-      return { token: data.token, user };
-    } catch (error) {
-      throw error;
-    }
-  }
+  //     const user: WebUser = {
+  //       fullName: data.fullName || storedUser?.fullName || "User",
+  //       email: storedCredentials?.email || storedUser?.email || "",
+  //       role: (data.role === "Backoffice"
+  //         ? "BackOffice"
+  //         : data.role) as UserRole,
+  //       assignedStation: data.assignedStation || storedUser?.assignedStation,
+  //     };
+
+  //     return { token: data.token, user };
+  //   } catch (error) {
+  //     throw error;
+  //   }
+  // }
 
   /**
    * Logout user
