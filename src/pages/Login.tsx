@@ -5,7 +5,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function Login() {
@@ -23,9 +29,9 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) return;
-    
+
     try {
       setLoginLoading(true);
       await login(email, password);
@@ -55,13 +61,14 @@ export default function Login() {
             </div>
             <h1 className="text-2xl font-bold">EV System</h1>
           </div>
-          
+
           <h2 className="text-3xl font-bold leading-tight">
             Manage EV Charging Infrastructure with Confidence
           </h2>
-          
+
           <p className="text-lg opacity-90">
-            Streamline your charging station operations, manage bookings, and provide exceptional service to EV owners.
+            Streamline your charging station operations, manage bookings, and
+            provide exceptional service to EV owners.
           </p>
 
           <div className="grid grid-cols-2 gap-4 text-sm mt-8">
@@ -87,7 +94,7 @@ export default function Login() {
               </div>
               <span className="text-xl font-bold">EV System</span>
             </div>
-            
+
             <CardTitle className="text-2xl">Welcome back</CardTitle>
             <CardDescription>
               Enter your credentials to access the management portal
@@ -103,7 +110,7 @@ export default function Login() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="admin@evsystem.com"
+                    placeholder="yohanchristmith@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
@@ -151,18 +158,18 @@ export default function Login() {
                   onCheckedChange={(checked) => setRememberMe(checked === true)}
                   disabled={loginLoading}
                 />
-                <Label 
-                  htmlFor="remember" 
+                <Label
+                  htmlFor="remember"
                   className="text-sm font-normal cursor-pointer"
                 >
                   Remember me
                 </Label>
               </div>
 
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 variant="accent"
-                className="w-full" 
+                className="w-full"
                 disabled={loginLoading || !email || !password}
               >
                 {loginLoading ? "Signing in..." : "Sign in"}
@@ -176,7 +183,10 @@ export default function Login() {
                 </a>
                 <div>
                   Need access?{" "}
-                  <a href="#" className="text-accent hover:text-accent/80 transition-colors font-medium">
+                  <a
+                    href="#"
+                    className="text-accent hover:text-accent/80 transition-colors font-medium"
+                  >
                     Contact admin
                   </a>
                 </div>
@@ -185,10 +195,9 @@ export default function Login() {
 
             {/* Demo credentials hint */}
             <div className="mt-4 p-3 bg-muted rounded-lg text-sm">
-              <div className="font-medium mb-1">Demo Credentials:</div>
+              <div className="font-medium mb-1">Test Credentials:</div>
               <div className="text-muted-foreground space-y-1">
-                <div>Admin: admin@evsystem.com / password</div>
-                <div>Operator: operator@evsystem.com / password</div>
+                <div>yohanchristmith@gmail.com / yohanchristmith@gmail.com</div>
               </div>
             </div>
           </CardContent>

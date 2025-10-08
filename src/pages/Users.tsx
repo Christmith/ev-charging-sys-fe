@@ -85,37 +85,37 @@ const mockUsers: WebUser[] = [
     lastName: "Operator",
     email: "jane.operator@evsystem.com",
     phone: "+94774567890",
-    role: "StationOperator", 
+    role: "StationOperator",
     assignedStationIds: ["station-3"],
     status: "DISABLED",
     lastLoginAt: "2024-11-20T13:22:00Z",
     createdAt: "2024-04-05T09:15:00Z",
     updatedAt: "2024-11-25T10:30:00Z",
-  }
+  },
 ];
 
-function RoleBadge({ role }: { role: WebUser['role'] }) {
+function RoleBadge({ role }: { role: WebUser["role"] }) {
   return (
-    <Badge 
-      variant="outline" 
+    <Badge
+      variant="outline"
       className={
-        role === 'BackOffice' 
-          ? "bg-accent/10 text-accent border-accent/20" 
+        role === "BackOffice"
+          ? "bg-accent/10 text-accent border-accent/20"
           : "bg-muted/10 text-muted-foreground border-muted/20"
       }
     >
-      {role === 'BackOffice' ? 'Back Office' : 'Station Operator'}
+      {role === "BackOffice" ? "Back Office" : "Station Operator"}
     </Badge>
   );
 }
 
-function StatusBadge({ status }: { status: WebUser['status'] }) {
+function StatusBadge({ status }: { status: WebUser["status"] }) {
   return (
-    <Badge 
-      variant="outline" 
+    <Badge
+      variant="outline"
       className={
-        status === 'ACTIVE' 
-          ? "bg-success/10 text-success border-success/20" 
+        status === "ACTIVE"
+          ? "bg-success/10 text-success border-success/20"
           : "bg-muted text-muted-foreground border-muted/20"
       }
     >
@@ -132,34 +132,32 @@ export default function Users() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [users, setUsers] = useState<WebUser[]>(mockUsers);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  
+
   // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  
+
   // Selected user and actions
   const [selectedUser, setSelectedUser] = useState<WebUser | null>(null);
-  const [statusAction, setStatusAction] = useState<'enable' | 'disable'>('disable');
+  const [statusAction, setStatusAction] = useState<"enable" | "disable">(
+    "disable"
+  );
   const [userToAction, setUserToAction] = useState<WebUser | null>(null);
 
-  // Only BackOffice users can access this page
-  if (user?.role !== 'BackOffice') {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   const filteredUsers = users.filter((webUser) => {
-    const matchesSearch = 
+    const matchesSearch =
       webUser.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       webUser.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       webUser.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       webUser.phone?.includes(searchTerm);
-    
+
     const matchesRole = roleFilter === "all" || webUser.role === roleFilter;
-    const matchesStatus = statusFilter === "all" || webUser.status === statusFilter;
-    
+    const matchesStatus =
+      statusFilter === "all" || webUser.status === statusFilter;
+
     return matchesSearch && matchesRole && matchesStatus;
   });
 
@@ -173,13 +171,20 @@ export default function Users() {
     pagination.resetToFirstPage();
   }, [searchTerm, roleFilter, statusFilter]);
 
-  const backOfficeUsers = users.filter(u => u.role === 'BackOffice').length;
-  const operatorUsers = users.filter(u => u.role === 'StationOperator').length;
-  const activeUsers = users.filter(u => u.status === 'ACTIVE').length;
+  // Only BackOffice users can access this page
+  if (user?.role !== "BackOffice") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const backOfficeUsers = users.filter((u) => u.role === "BackOffice").length;
+  const operatorUsers = users.filter(
+    (u) => u.role === "StationOperator"
+  ).length;
+  const activeUsers = users.filter((u) => u.status === "ACTIVE").length;
 
   // Handlers
   const handleCreateUser = (newUser: WebUser) => {
-    setUsers(prev => [...prev, newUser]);
+    setUsers((prev) => [...prev, newUser]);
     toast({
       title: "Success",
       description: "User created successfully",
@@ -187,8 +192,8 @@ export default function Users() {
   };
 
   const handleUpdateUser = (updatedUser: WebUser) => {
-    setUsers(prev => 
-      prev.map(u => u.id === updatedUser.id ? updatedUser : u)
+    setUsers((prev) =>
+      prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
     );
     toast({
       title: "Success",
@@ -197,13 +202,13 @@ export default function Users() {
   };
 
   const handleDeleteUser = (userId: string) => {
-    setUserToAction(users.find(u => u.id === userId) || null);
+    setUserToAction(users.find((u) => u.id === userId) || null);
     setDeleteConfirmOpen(true);
   };
 
   const confirmDeleteUser = () => {
     if (userToAction) {
-      setUsers(prev => prev.filter(u => u.id !== userToAction.id));
+      setUsers((prev) => prev.filter((u) => u.id !== userToAction.id));
       toast({
         title: "Success",
         description: "User deleted successfully",
@@ -214,22 +219,23 @@ export default function Users() {
     setUserToAction(null);
   };
 
-  const handleStatusChange = (user: WebUser, newStatus: 'ACTIVE' | 'DISABLED') => {
+  const handleStatusChange = (
+    user: WebUser,
+    newStatus: "ACTIVE" | "DISABLED"
+  ) => {
     const updatedUser = {
       ...user,
       status: newStatus,
       updatedAt: new Date().toISOString(),
     };
-    setUsers(prev => 
-      prev.map(u => u.id === user.id ? updatedUser : u)
-    );
+    setUsers((prev) => prev.map((u) => (u.id === user.id ? updatedUser : u)));
     toast({
       title: "Success",
       description: `User ${newStatus.toLowerCase()} successfully`,
     });
   };
 
-  const handleStatusAction = (user: WebUser, action: 'enable' | 'disable') => {
+  const handleStatusAction = (user: WebUser, action: "enable" | "disable") => {
     setUserToAction(user);
     setStatusAction(action);
     setStatusDialogOpen(true);
@@ -237,7 +243,7 @@ export default function Users() {
 
   const confirmStatusAction = () => {
     if (userToAction) {
-      const newStatus = statusAction === 'enable' ? 'ACTIVE' : 'DISABLED';
+      const newStatus = statusAction === "enable" ? "ACTIVE" : "DISABLED";
       handleStatusChange(userToAction, newStatus);
     }
     setStatusDialogOpen(false);
@@ -259,12 +265,18 @@ export default function Users() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Web Users & Roles</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Web Users & Roles
+          </h1>
           <p className="text-muted-foreground">
             Manage system users and their role-based access (BackOffice only)
           </p>
         </div>
-        <Button variant="accent" className="gap-2" onClick={() => setCreateModalOpen(true)}>
+        <Button
+          variant="accent"
+          className="gap-2"
+          onClick={() => setCreateModalOpen(true)}
+        >
           <Plus className="w-4 h-4" />
           Add User
         </Button>
@@ -283,16 +295,22 @@ export default function Users() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">BackOffice Users</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              BackOffice Users
+            </CardTitle>
             <Shield className="h-4 w-4 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-accent">{backOfficeUsers}</div>
+            <div className="text-2xl font-bold text-accent">
+              {backOfficeUsers}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Station Operators</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Station Operators
+            </CardTitle>
             <MapPin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -328,7 +346,7 @@ export default function Users() {
                 />
               </div>
             </div>
-            
+
             <Select value={roleFilter} onValueChange={setRoleFilter}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Filter by role" />
@@ -336,7 +354,9 @@ export default function Users() {
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
                 <SelectItem value="BackOffice">BackOffice</SelectItem>
-                <SelectItem value="StationOperator">Station Operator</SelectItem>
+                <SelectItem value="StationOperator">
+                  Station Operator
+                </SelectItem>
               </SelectContent>
             </Select>
 
@@ -364,12 +384,16 @@ export default function Users() {
           <div className="flex items-start gap-3">
             <Shield className="w-5 h-5 text-accent mt-0.5" />
             <div className="space-y-1">
-              <div className="font-medium text-accent">Role-based Access Control</div>
+              <div className="font-medium text-accent">
+                Role-based Access Control
+              </div>
               <div className="text-sm text-muted-foreground">
-                • <strong>BackOffice:</strong> Full system administration access, user management, reports, settings
-                • <strong>Station Operator:</strong> Limited to operational tasks - bookings, owners, assigned stations
-                • Only BackOffice users can create, modify, or disable other system users
-                • Station Operators can be assigned to specific charging stations
+                • <strong>BackOffice:</strong> Full system administration
+                access, user management, reports, settings •{" "}
+                <strong>Station Operator:</strong> Limited to operational tasks
+                - bookings, owners, assigned stations • Only BackOffice users
+                can create, modify, or disable other system users • Station
+                Operators can be assigned to specific charging stations
               </div>
             </div>
           </div>
@@ -399,12 +423,15 @@ export default function Users() {
                   <TableRow key={webUser.id}>
                     <TableCell>
                       <div>
-                        <div className="font-medium">{webUser.firstName} {webUser.lastName}</div>
+                        <div className="font-medium">
+                          {webUser.firstName} {webUser.lastName}
+                        </div>
                         <div className="text-sm text-muted-foreground">
                           ID: {webUser.id}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Joined {new Date(webUser.createdAt).toLocaleDateString()}
+                          Joined{" "}
+                          {new Date(webUser.createdAt).toLocaleDateString()}
                         </div>
                       </div>
                     </TableCell>
@@ -412,7 +439,9 @@ export default function Users() {
                       <div className="space-y-1">
                         <div className="text-sm">{webUser.email}</div>
                         {webUser.phone && (
-                          <div className="text-sm text-muted-foreground">{webUser.phone}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {webUser.phone}
+                          </div>
                         )}
                       </div>
                     </TableCell>
@@ -420,9 +449,12 @@ export default function Users() {
                       <RoleBadge role={webUser.role} />
                     </TableCell>
                     <TableCell>
-                      {webUser.assignedStationIds && webUser.assignedStationIds.length > 0 ? (
+                      {webUser.assignedStationIds &&
+                      webUser.assignedStationIds.length > 0 ? (
                         <div className="text-sm">
-                          <div className="font-medium">{webUser.assignedStationIds.length} stations</div>
+                          <div className="font-medium">
+                            {webUser.assignedStationIds.length} stations
+                          </div>
                           <div className="text-muted-foreground">
                             {webUser.assignedStationIds.slice(0, 2).join(", ")}
                             {webUser.assignedStationIds.length > 2 && "..."}
@@ -430,7 +462,9 @@ export default function Users() {
                         </div>
                       ) : (
                         <div className="text-sm text-muted-foreground">
-                          {webUser.role === 'BackOffice' ? 'All stations' : 'None assigned'}
+                          {webUser.role === "BackOffice"
+                            ? "All stations"
+                            : "None assigned"}
                         </div>
                       )}
                     </TableCell>
@@ -439,7 +473,12 @@ export default function Users() {
                         <StatusBadge status={webUser.status} />
                         <div className="text-xs text-muted-foreground">
                           {webUser.lastLoginAt ? (
-                            <>Last: {new Date(webUser.lastLoginAt).toLocaleDateString()}</>
+                            <>
+                              Last:{" "}
+                              {new Date(
+                                webUser.lastLoginAt
+                              ).toLocaleDateString()}
+                            </>
                           ) : (
                             "Never logged in"
                           )}
@@ -448,33 +487,37 @@ export default function Users() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => handleViewUser(webUser)}
                         >
                           View
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => handleEditUser(webUser)}
                         >
                           Edit
                         </Button>
-                        {webUser.status === 'ACTIVE' ? (
-                          <Button 
-                            variant="destructive" 
+                        {webUser.status === "ACTIVE" ? (
+                          <Button
+                            variant="destructive"
                             size="sm"
-                            onClick={() => handleStatusAction(webUser, 'disable')}
+                            onClick={() =>
+                              handleStatusAction(webUser, "disable")
+                            }
                           >
                             Disable
                           </Button>
                         ) : (
-                          <Button 
-                            variant="success" 
+                          <Button
+                            variant="success"
                             size="sm"
-                            onClick={() => handleStatusAction(webUser, 'enable')}
+                            onClick={() =>
+                              handleStatusAction(webUser, "enable")
+                            }
                           >
                             Enable
                           </Button>
@@ -486,18 +529,19 @@ export default function Users() {
               </TableBody>
             </Table>
           </div>
-          
+
           {filteredUsers.length === 0 && (
             <div className="text-center py-12">
               <User className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
               <div className="text-lg font-medium mb-2">No users found</div>
               <div className="text-muted-foreground mb-4">
                 {searchTerm || roleFilter !== "all" || statusFilter !== "all"
-                  ? "Try adjusting your search or filter criteria" 
-                  : "Add the first system user to get started"
-                }
+                  ? "Try adjusting your search or filter criteria"
+                  : "Add the first system user to get started"}
               </div>
-              <Button variant="accent" onClick={() => setCreateModalOpen(true)}>Add User</Button>
+              <Button variant="accent" onClick={() => setCreateModalOpen(true)}>
+                Add User
+              </Button>
             </div>
           )}
         </CardContent>
@@ -557,7 +601,11 @@ export default function Users() {
         open={statusDialogOpen}
         onOpenChange={setStatusDialogOpen}
         action={statusAction}
-        userName={userToAction ? `${userToAction.firstName} ${userToAction.lastName}` : ''}
+        userName={
+          userToAction
+            ? `${userToAction.firstName} ${userToAction.lastName}`
+            : ""
+        }
         onConfirm={confirmStatusAction}
       />
 
