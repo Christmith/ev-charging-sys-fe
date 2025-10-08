@@ -148,7 +148,7 @@ class AuthService {
   static async logout(): Promise<void> {
     try {
       // Call logout endpoint if your API has one
-      await api.post("/auth/logout");
+      // await api.post("/auth/logout");
     } catch (error) {
       // Even if logout fails on server, clear local storage
       console.warn("Logout API call failed, but clearing local storage");

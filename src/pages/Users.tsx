@@ -44,51 +44,43 @@ const mockStations = [
 const mockUsers: WebUser[] = [
   {
     id: "1",
-    firstName: "Admin",
-    lastName: "User",
     email: "admin@evsystem.com",
-    phone: "+94771234567",
+    fullName: "Admin User",
     role: "BackOffice",
-    status: "ACTIVE",
-    lastLoginAt: "2024-12-13T09:30:00Z",
+    phone: "+94771234567",
+    status: "Active",
     createdAt: "2024-01-01T10:00:00Z",
     updatedAt: "2024-01-01T10:00:00Z",
   },
   {
     id: "2",
-    firstName: "Station",
-    lastName: "Operator",
     email: "operator@evsystem.com",
-    phone: "+94772345678",
+    fullName: "Station Operator",
     role: "StationOperator",
-    assignedStationIds: ["station-1", "station-2"],
-    status: "ACTIVE",
-    lastLoginAt: "2024-12-13T08:15:00Z",
+    phone: "+94772345678",
+    assignedStationId: "station-1",
+    status: "Active",
     createdAt: "2024-02-15T14:30:00Z",
     updatedAt: "2024-02-15T14:30:00Z",
   },
   {
     id: "3",
-    firstName: "John",
-    lastName: "Manager",
     email: "john.manager@evsystem.com",
+    fullName: "John Manager",
     phone: "+94773456789",
     role: "BackOffice",
-    status: "ACTIVE",
-    lastLoginAt: "2024-12-12T16:45:00Z",
+    status: "Active",
     createdAt: "2024-03-10T11:20:00Z",
     updatedAt: "2024-03-10T11:20:00Z",
   },
   {
     id: "4",
-    firstName: "Jane",
-    lastName: "Operator",
+    fullName: "Jane Operator",
     email: "jane.operator@evsystem.com",
     phone: "+94774567890",
     role: "StationOperator",
-    assignedStationIds: ["station-3"],
-    status: "DISABLED",
-    lastLoginAt: "2024-11-20T13:22:00Z",
+    assignedStationId: "station-3",
+    status: "Inactive",
     createdAt: "2024-04-05T09:15:00Z",
     updatedAt: "2024-11-25T10:30:00Z",
   },
@@ -114,7 +106,7 @@ function StatusBadge({ status }: { status: WebUser["status"] }) {
     <Badge
       variant="outline"
       className={
-        status === "ACTIVE"
+        status === "Active"
           ? "bg-success/10 text-success border-success/20"
           : "bg-muted text-muted-foreground border-muted/20"
       }
@@ -149,8 +141,7 @@ export default function Users() {
 
   const filteredUsers = users.filter((webUser) => {
     const matchesSearch =
-      webUser.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      webUser.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      webUser.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       webUser.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       webUser.phone?.includes(searchTerm);
 
@@ -180,7 +171,7 @@ export default function Users() {
   const operatorUsers = users.filter(
     (u) => u.role === "StationOperator"
   ).length;
-  const activeUsers = users.filter((u) => u.status === "ACTIVE").length;
+  const activeUsers = users.filter((u) => u.status === "Active").length;
 
   // Handlers
   const handleCreateUser = (newUser: WebUser) => {
@@ -221,7 +212,7 @@ export default function Users() {
 
   const handleStatusChange = (
     user: WebUser,
-    newStatus: "ACTIVE" | "DISABLED"
+    newStatus: "Active" | "Inactive"
   ) => {
     const updatedUser = {
       ...user,
@@ -243,7 +234,7 @@ export default function Users() {
 
   const confirmStatusAction = () => {
     if (userToAction) {
-      const newStatus = statusAction === "enable" ? "ACTIVE" : "DISABLED";
+      const newStatus = statusAction === "enable" ? "Active" : "Inactive";
       handleStatusChange(userToAction, newStatus);
     }
     setStatusDialogOpen(false);
@@ -366,8 +357,8 @@ export default function Users() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="ACTIVE">Active</SelectItem>
-                <SelectItem value="DISABLED">Disabled</SelectItem>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -423,9 +414,7 @@ export default function Users() {
                   <TableRow key={webUser.id}>
                     <TableCell>
                       <div>
-                        <div className="font-medium">
-                          {webUser.firstName} {webUser.lastName}
-                        </div>
+                        <div className="font-medium">{webUser.fullName}</div>
                         <div className="text-sm text-muted-foreground">
                           ID: {webUser.id}
                         </div>
@@ -449,15 +438,17 @@ export default function Users() {
                       <RoleBadge role={webUser.role} />
                     </TableCell>
                     <TableCell>
-                      {webUser.assignedStationIds &&
-                      webUser.assignedStationIds.length > 0 ? (
+                      {webUser.assignedStationId ? (
                         <div className="text-sm">
                           <div className="font-medium">
-                            {webUser.assignedStationIds.length} stations
+                            {mockStations.find(
+                              (s) => s.id === webUser.assignedStationId
+                            )?.name || "Unknown Station"}
                           </div>
                           <div className="text-muted-foreground">
-                            {webUser.assignedStationIds.slice(0, 2).join(", ")}
-                            {webUser.assignedStationIds.length > 2 && "..."}
+                            {mockStations.find(
+                              (s) => s.id === webUser.assignedStationId
+                            )?.code || ""}
                           </div>
                         </div>
                       ) : (
@@ -472,16 +463,10 @@ export default function Users() {
                       <div className="space-y-2">
                         <StatusBadge status={webUser.status} />
                         <div className="text-xs text-muted-foreground">
-                          {webUser.lastLoginAt ? (
-                            <>
-                              Last:{" "}
-                              {new Date(
-                                webUser.lastLoginAt
-                              ).toLocaleDateString()}
-                            </>
-                          ) : (
-                            "Never logged in"
-                          )}
+                          Updated{" "}
+                          {new Date(
+                            webUser.updatedAt || webUser.createdAt || ""
+                          ).toLocaleDateString()}
                         </div>
                       </div>
                     </TableCell>
@@ -501,7 +486,7 @@ export default function Users() {
                         >
                           Edit
                         </Button>
-                        {webUser.status === "ACTIVE" ? (
+                        {webUser.status === "Active" ? (
                           <Button
                             variant="destructive"
                             size="sm"
@@ -601,11 +586,7 @@ export default function Users() {
         open={statusDialogOpen}
         onOpenChange={setStatusDialogOpen}
         action={statusAction}
-        userName={
-          userToAction
-            ? `${userToAction.firstName} ${userToAction.lastName}`
-            : ""
-        }
+        userName={userToAction ? userToAction.fullName : ""}
         onConfirm={confirmStatusAction}
       />
 

@@ -1,10 +1,15 @@
 export type UserRole = "BackOffice" | "StationOperator";
 
 export interface WebUser {
-  fullName: string;
-  email: string; // Store email from credentials
+  id?: string;
+  email: string;
   role: UserRole;
+  fullName: string;
+  phone?: string;
   assignedStationId?: string; // Object ID for StationOperator role
+  status?: "Active" | "Inactive";
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AuthContextType {
