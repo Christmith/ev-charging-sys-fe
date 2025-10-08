@@ -1,4 +1,4 @@
-export type UserRole = 'BackOffice' | 'StationOperator';
+export type UserRole = "BackOffice" | "StationOperator" | "EVOwner";
 
 export interface WebUser {
   id: string;
@@ -8,7 +8,7 @@ export interface WebUser {
   phone?: string;
   role: UserRole;
   assignedStationIds?: string[];
-  status: 'ACTIVE' | 'DISABLED';
+  status: "ACTIVE" | "DISABLED";
   lastLoginAt?: string;
   createdAt: string;
   updatedAt: string;

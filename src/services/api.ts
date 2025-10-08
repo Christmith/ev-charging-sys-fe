@@ -39,7 +39,7 @@ api.interceptors.response.use(
 
     // Transform error for consistent handling
     const errorMessage =
-      error.response?.data?.message ||
+      (error.response?.data as any)?.message ||
       error.message ||
       "An unexpected error occurred";
 

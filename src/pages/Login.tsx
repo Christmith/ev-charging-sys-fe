@@ -110,7 +110,7 @@ export default function Login() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="yohanchristmith@gmail.com"
+                    placeholder="Enter your email address"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
@@ -190,14 +190,6 @@ export default function Login() {
                     Contact admin
                   </a>
                 </div>
-              </div>
-            </div>
-
-            {/* Demo credentials hint */}
-            <div className="mt-4 p-3 bg-muted rounded-lg text-sm">
-              <div className="font-medium mb-1">Test Credentials:</div>
-              <div className="text-muted-foreground space-y-1">
-                <div>yohanchristmith@gmail.com / yohanchristmith@gmail.com</div>
               </div>
             </div>
           </CardContent>

@@ -1,5 +1,5 @@
 import api from "./api";
-import { WebUser, LoginRequest } from "@/types/auth";
+import { WebUser, LoginRequest, UserRole } from "@/types/auth";
 import { LoginResponse } from "@/types/api";
 
 class AuthService {
@@ -14,7 +14,7 @@ class AuthService {
   ): Promise<{ token: string; user: WebUser }> {
     try {
       const response = await api.post<LoginResponse>(
-        "/auth/login",
+        "/Auth/login",
         credentials
       );
       const data = response.data;
@@ -25,7 +25,9 @@ class AuthService {
         firstName: data.firstName || "User",
         lastName: data.lastName || "",
         email: credentials.email,
-        role: data.role === "Backoffice" ? "BackOffice" : data.role,
+        role: (data.role === "Backoffice"
+          ? "BackOffice"
+          : data.role) as UserRole,
         status: "ACTIVE",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -109,7 +111,9 @@ class AuthService {
         firstName: data.firstName || "User",
         lastName: data.lastName || "",
         email: data.email || "",
-        role: data.role === "Backoffice" ? "BackOffice" : data.role,
+        role: (data.role === "Backoffice"
+          ? "BackOffice"
+          : data.role) as UserRole,
         status: "ACTIVE",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
