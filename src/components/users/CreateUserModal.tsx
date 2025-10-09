@@ -1,10 +1,20 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { WebUser, UserRole } from "@/types/auth";
 import { Shield, MapPin } from "lucide-react";
@@ -20,7 +30,7 @@ export function CreateUserModal({
   open,
   onOpenChange,
   onUserCreated,
-  availableStations = []
+  availableStations = [],
 }: CreateUserModalProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
@@ -31,17 +41,33 @@ export function CreateUserModal({
     role: "" as UserRole | "",
     password: "",
     confirmPassword: "",
-    assignedStationIds: [] as string[]
+    assignedStationId: "" as string,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Basic validation
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.role || !formData.password) {
+    if (
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.email ||
+      !formData.role ||
+      !formData.password
+    ) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Station assignment validation for StationOperator
+    if (formData.role === "StationOperator" && !formData.assignedStationId) {
+      toast({
+        title: "Validation Error",
+        description: "Station Operator must be assigned to a charging station",
         variant: "destructive",
       });
       return;
@@ -68,19 +94,21 @@ export function CreateUserModal({
     // Create new user
     const newUser: WebUser = {
       id: `user-${Date.now()}`, // Generate ID
-      firstName: formData.firstName,
-      lastName: formData.lastName,
+      fullName: `${formData.firstName} ${formData.lastName}`,
       email: formData.email,
       phone: formData.phone || undefined,
       role: formData.role as UserRole,
-      assignedStationIds: formData.role === 'StationOperator' ? formData.assignedStationIds : undefined,
-      status: "ACTIVE",
+      assignedStationId:
+        formData.role === "StationOperator"
+          ? formData.assignedStationId
+          : undefined,
+      status: "Active",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     onUserCreated(newUser);
-    
+
     toast({
       title: "Success",
       description: "User created successfully",
@@ -95,23 +123,14 @@ export function CreateUserModal({
       role: "",
       password: "",
       confirmPassword: "",
-      assignedStationIds: []
+      assignedStationId: "",
     });
 
     onOpenChange(false);
   };
 
   const handleInputChange = (field: string, value: string | string[]) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleStationToggle = (stationId: string, checked: boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      assignedStationIds: checked
-        ? [...prev.assignedStationIds, stationId]
-        : prev.assignedStationIds.filter(id => id !== stationId)
-    }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -125,14 +144,16 @@ export function CreateUserModal({
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Basic Information</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name *</Label>
                 <Input
                   id="firstName"
                   value={formData.firstName}
-                  onChange={(e) => handleInputChange("firstName", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("firstName", e.target.value)
+                  }
                   required
                 />
               </div>
@@ -141,7 +162,9 @@ export function CreateUserModal({
                 <Input
                   id="lastName"
                   value={formData.lastName}
-                  onChange={(e) => handleInputChange("lastName", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("lastName", e.target.value)
+                  }
                   required
                 />
               </div>
@@ -172,10 +195,13 @@ export function CreateUserModal({
           {/* Role & Access */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Role & Access</h3>
-            
+
             <div className="space-y-2">
               <Label htmlFor="role">User Role *</Label>
-              <Select value={formData.role} onValueChange={(value) => handleInputChange("role", value)}>
+              <Select
+                value={formData.role}
+                onValueChange={(value) => handleInputChange("role", value)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select user role" />
                 </SelectTrigger>
@@ -194,48 +220,55 @@ export function CreateUserModal({
                   </SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <div className="text-sm text-muted-foreground">
-                {formData.role === 'BackOffice' 
+                {formData.role === "BackOffice"
                   ? "Full system access: user management, reports, all stations"
-                  : formData.role === 'StationOperator'
+                  : formData.role === "StationOperator"
                   ? "Limited access: bookings, owners, assigned stations only"
-                  : "Choose a role to see permissions"
-                }
+                  : "Choose a role to see permissions"}
               </div>
             </div>
 
             {/* Station Assignment for Station Operators */}
-            {formData.role === 'StationOperator' && availableStations.length > 0 && (
-              <div className="space-y-2">
-                <Label>Assigned Charging Stations</Label>
-                <div className="border rounded-lg p-4 max-h-40 overflow-y-auto space-y-2">
-                  {availableStations.map((station) => (
-                    <div key={station.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`station-${station.id}`}
-                        checked={formData.assignedStationIds.includes(station.id)}
-                        onCheckedChange={(checked) => 
-                          handleStationToggle(station.id, checked as boolean)
-                        }
-                      />
-                      <Label htmlFor={`station-${station.id}`} className="text-sm">
-                        {station.name} {station.code && `(${station.code})`}
-                      </Label>
-                    </div>
-                  ))}
+            {formData.role === "StationOperator" &&
+              availableStations.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="assignedStation">
+                    Assigned Charging Station *
+                  </Label>
+                  <Select
+                    value={formData.assignedStationId}
+                    onValueChange={(value) =>
+                      handleInputChange("assignedStationId", value)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a charging station" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableStations.map((station) => (
+                        <SelectItem key={station.id} value={station.id}>
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4" />
+                            {station.name} {station.code && `(${station.code})`}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="text-xs text-muted-foreground">
+                    Station operators can only be assigned to one charging
+                    station
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {formData.assignedStationIds.length} stations selected
-                </div>
-              </div>
-            )}
+              )}
           </div>
 
           {/* Security */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Security</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="password">Password *</Label>
@@ -243,7 +276,9 @@ export function CreateUserModal({
                   id="password"
                   type="password"
                   value={formData.password}
-                  onChange={(e) => handleInputChange("password", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("password", e.target.value)
+                  }
                   required
                   placeholder="Minimum 8 characters"
                 />
@@ -254,7 +289,9 @@ export function CreateUserModal({
                   id="confirmPassword"
                   type="password"
                   value={formData.confirmPassword}
-                  onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("confirmPassword", e.target.value)
+                  }
                   required
                 />
               </div>
@@ -263,7 +300,11 @@ export function CreateUserModal({
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-6 border-t">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" variant="default">
