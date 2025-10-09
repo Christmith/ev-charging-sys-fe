@@ -78,7 +78,7 @@ export function AppHeader() {
                 Profile
               </DropdownMenuItem>
 
-              {user?.role === "BackOffice" && (
+              {user?.role === "Backoffice" && (
                 <DropdownMenuItem className="cursor-pointer">
                   <Settings className="mr-2 h-4 w-4" />
                   Settings

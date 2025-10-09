@@ -30,15 +30,14 @@ import { ConfirmationDialog } from "@/components/bookings/ConfirmationDialog";
 import { useToast } from "@/hooks/use-toast";
 import { usePagination } from "@/hooks/usePagination";
 import { DataPagination } from "@/components/ui/data-pagination";
+import { stationApi } from "@/services/api";
 
-// Mock station data for assignments
-const mockStations = [
-  { id: "station-1", name: "City Mall Charging Hub", code: "CM001" },
-  { id: "station-2", name: "Airport Terminal Station", code: "AT002" },
-  { id: "station-3", name: "Downtown Business Center", code: "DBC003" },
-  { id: "station-4", name: "Hospital Emergency Station", code: "HES004" },
-  { id: "station-5", name: "University Campus Hub", code: "UCH005" },
-];
+// Station type for assignment
+type StationForAssignment = {
+  id: string;
+  stationName: string;
+  stationCode: string;
+};
 
 // Mock data - replace with API calls
 const mockUsers: WebUser[] = [
@@ -46,7 +45,7 @@ const mockUsers: WebUser[] = [
     id: "1",
     email: "admin@evsystem.com",
     fullName: "Admin User",
-    role: "BackOffice",
+    role: "Backoffice",
     phone: "+94771234567",
     status: "Active",
     createdAt: "2024-01-01T10:00:00Z",
@@ -68,7 +67,7 @@ const mockUsers: WebUser[] = [
     email: "john.manager@evsystem.com",
     fullName: "John Manager",
     phone: "+94773456789",
-    role: "BackOffice",
+    role: "Backoffice",
     status: "Active",
     createdAt: "2024-03-10T11:20:00Z",
     updatedAt: "2024-03-10T11:20:00Z",
@@ -91,12 +90,12 @@ function RoleBadge({ role }: { role: WebUser["role"] }) {
     <Badge
       variant="outline"
       className={
-        role === "BackOffice"
+        role === "Backoffice"
           ? "bg-accent/10 text-accent border-accent/20"
           : "bg-muted/10 text-muted-foreground border-muted/20"
       }
     >
-      {role === "BackOffice" ? "Back Office" : "Station Operator"}
+      {role === "Backoffice" ? "Back Office" : "Station Operator"}
     </Badge>
   );
 }
@@ -124,6 +123,10 @@ export default function Users() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [users, setUsers] = useState<WebUser[]>(mockUsers);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [availableStations, setAvailableStations] = useState<
+    StationForAssignment[]
+  >([]);
+  const [stationsLoading, setStationsLoading] = useState(false);
 
   // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -162,12 +165,34 @@ export default function Users() {
     pagination.resetToFirstPage();
   }, [searchTerm, roleFilter, statusFilter]);
 
+  // Fetch available stations for assignment
+  useEffect(() => {
+    const fetchStations = async () => {
+      try {
+        setStationsLoading(true);
+        const stations = await stationApi.getAllStationsForAssignment();
+        setAvailableStations(stations);
+      } catch (error) {
+        console.error("Failed to fetch stations:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load available stations",
+          variant: "destructive",
+        });
+      } finally {
+        setStationsLoading(false);
+      }
+    };
+
+    fetchStations();
+  }, []);
+
   // Only BackOffice users can access this page
-  if (user?.role !== "BackOffice") {
+  if (user?.role !== "Backoffice") {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const backOfficeUsers = users.filter((u) => u.role === "BackOffice").length;
+  const backOfficeUsers = users.filter((u) => u.role === "Backoffice").length;
   const operatorUsers = users.filter(
     (u) => u.role === "StationOperator"
   ).length;
@@ -344,7 +369,7 @@ export default function Users() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="BackOffice">BackOffice</SelectItem>
+                <SelectItem value="Backoffice">BackOffice</SelectItem>
                 <SelectItem value="StationOperator">
                   Station Operator
                 </SelectItem>
@@ -441,19 +466,19 @@ export default function Users() {
                       {webUser.assignedStationId ? (
                         <div className="text-sm">
                           <div className="font-medium">
-                            {mockStations.find(
+                            {availableStations.find(
                               (s) => s.id === webUser.assignedStationId
-                            )?.name || "Unknown Station"}
+                            )?.stationName || "Unknown Station"}
                           </div>
                           <div className="text-muted-foreground">
-                            {mockStations.find(
+                            {availableStations.find(
                               (s) => s.id === webUser.assignedStationId
-                            )?.code || ""}
+                            )?.stationCode || ""}
                           </div>
                         </div>
                       ) : (
                         <div className="text-sm text-muted-foreground">
-                          {webUser.role === "BackOffice"
+                          {webUser.role === "Backoffice"
                             ? "All stations"
                             : "None assigned"}
                         </div>
@@ -562,14 +587,31 @@ export default function Users() {
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
         onUserCreated={handleCreateUser}
-        availableStations={mockStations}
+        availableStations={
+          Array.isArray(availableStations)
+            ? availableStations.map((station) => ({
+                id: station.id,
+                name: station.stationName,
+                code: station.stationCode,
+              }))
+            : []
+        }
+        loading={stationsLoading}
       />
 
       <ViewWebUserModal
         open={viewModalOpen}
         onOpenChange={setViewModalOpen}
         user={selectedUser}
-        availableStations={mockStations}
+        availableStations={
+          Array.isArray(availableStations)
+            ? availableStations.map((station) => ({
+                id: station.id,
+                name: station.stationName,
+                code: station.stationCode,
+              }))
+            : []
+        }
       />
 
       <EditUserModal
@@ -578,7 +620,15 @@ export default function Users() {
         user={selectedUser}
         onUserUpdated={handleUpdateUser}
         onUserDeleted={handleDeleteUser}
-        availableStations={mockStations}
+        availableStations={
+          Array.isArray(availableStations)
+            ? availableStations.map((station) => ({
+                id: station.id,
+                name: station.stationName,
+                code: station.stationCode,
+              }))
+            : []
+        }
       />
 
       {/* Confirmation Dialogs */}

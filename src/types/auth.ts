@@ -1,4 +1,4 @@
-export type UserRole = "BackOffice" | "StationOperator";
+export type UserRole = "Backoffice" | "StationOperator";
 
 export interface WebUser {
   id?: string;

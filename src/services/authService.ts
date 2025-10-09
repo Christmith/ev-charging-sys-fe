@@ -18,28 +18,19 @@ class AuthService {
   static async login(
     credentials: LoginRequest
   ): Promise<{ token: string; user: WebUser }> {
-    try {
-      const response = await api.post<LoginResponse>(
-        "/Auth/login",
-        credentials
-      );
-      const data = response.data;
+    const response = await api.post<LoginResponse>("/Auth/login", credentials);
+    const data = response.data;
 
-      // Create user object from API response
-      const user: WebUser = {
-        fullName:
-          data.fullName.split(" ").slice(0, 2).join(" ") || "Station User",
-        email: credentials.email, // Store email from credentials
-        role: (data.role === "Backoffice"
-          ? "BackOffice"
-          : data.role) as UserRole,
-        assignedStationId: data.assignedStationId, // Only present for StationOperator
-      };
+    // Create user object from API response
+    const user: WebUser = {
+      fullName:
+        data.fullName.split(" ").slice(0, 2).join(" ") || "Station User",
+      email: credentials.email, // Store email from credentials
+      role: (data.role === "Backoffice" ? "Backoffice" : data.role) as UserRole,
+      assignedStationId: data.assignedStationId, // Only present for StationOperator
+    };
 
-      return { token: data.token, user };
-    } catch (error) {
-      throw error;
-    }
+    return { token: data.token, user };
   }
 
   /**

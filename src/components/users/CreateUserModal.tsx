@@ -18,12 +18,14 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { WebUser, UserRole } from "@/types/auth";
 import { Shield, MapPin } from "lucide-react";
+import { userApi } from "@/services/api";
 
 interface CreateUserModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUserCreated: (user: WebUser) => void;
   availableStations?: Array<{ id: string; name: string; code?: string }>;
+  loading?: boolean;
 }
 
 export function CreateUserModal({
@@ -31,6 +33,7 @@ export function CreateUserModal({
   onOpenChange,
   onUserCreated,
   availableStations = [],
+  loading = false,
 }: CreateUserModalProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
@@ -38,13 +41,14 @@ export function CreateUserModal({
     lastName: "",
     email: "",
     phone: "",
-    role: "" as UserRole | "",
+    role: "" as UserRole,
     password: "",
     confirmPassword: "",
     assignedStationId: "" as string,
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Basic validation
@@ -64,13 +68,25 @@ export function CreateUserModal({
     }
 
     // Station assignment validation for StationOperator
-    if (formData.role === "StationOperator" && !formData.assignedStationId) {
-      toast({
-        title: "Validation Error",
-        description: "Station Operator must be assigned to a charging station",
-        variant: "destructive",
-      });
-      return;
+    if (formData.role === "StationOperator") {
+      if (!formData.assignedStationId) {
+        toast({
+          title: "Validation Error",
+          description:
+            "Station Operator must be assigned to a charging station",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (availableStations.length === 0) {
+        toast({
+          title: "Validation Error",
+          description:
+            "No stations available for assignment. Please try again later.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -91,42 +107,69 @@ export function CreateUserModal({
       return;
     }
 
-    // Create new user
-    const newUser: WebUser = {
-      id: `user-${Date.now()}`, // Generate ID
-      fullName: `${formData.firstName} ${formData.lastName}`,
-      email: formData.email,
-      phone: formData.phone || undefined,
-      role: formData.role as UserRole,
-      assignedStationId:
-        formData.role === "StationOperator"
-          ? formData.assignedStationId
-          : undefined,
-      status: "Active",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    try {
+      setIsSubmitting(true);
 
-    onUserCreated(newUser);
+      // Prepare API request data
+      const apiData = {
+        email: formData.email,
+        password: formData.password,
+        role: formData.role as "Backoffice" | "StationOperator",
+        fullName: `${formData.firstName} ${formData.lastName}`,
+        phone: formData.phone || undefined,
+        assignedStationId:
+          formData.role === "StationOperator"
+            ? formData.assignedStationId
+            : null,
+      };
 
-    toast({
-      title: "Success",
-      description: "User created successfully",
-    });
+      // Call the API
+      const response = await userApi.createOperationalUser(apiData);
 
-    // Reset form
-    setFormData({
-      firstName: "",
-      lastName: "",
-      email: "",
-      phone: "",
-      role: "",
-      password: "",
-      confirmPassword: "",
-      assignedStationId: "",
-    });
+      // Create user object for the parent component (for UI updates)
+      const newUser: WebUser = {
+        id: `user-${Date.now()}`,
+        fullName: apiData.fullName,
+        email: apiData.email,
+        phone: apiData.phone,
+        role: apiData.role as UserRole,
+        assignedStationId: apiData.assignedStationId,
+        status: "Active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-    onOpenChange(false);
+      onUserCreated(newUser);
+
+      toast({
+        title: "Success",
+        description: response.message || "User created successfully",
+      });
+
+      // Reset form
+      setFormData({
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        role: "" as UserRole,
+        password: "",
+        confirmPassword: "",
+        assignedStationId: "",
+      });
+
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Failed to create user:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to create user",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleInputChange = (field: string, value: string | string[]) => {
@@ -206,10 +249,10 @@ export function CreateUserModal({
                   <SelectValue placeholder="Select user role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="BackOffice">
+                  <SelectItem value="Backoffice">
                     <div className="flex items-center gap-2">
                       <Shield className="w-4 h-4 text-accent" />
-                      BackOffice - Full Admin Access
+                      Backoffice - Full Admin Access
                     </div>
                   </SelectItem>
                   <SelectItem value="StationOperator">
@@ -222,7 +265,7 @@ export function CreateUserModal({
               </Select>
 
               <div className="text-sm text-muted-foreground">
-                {formData.role === "BackOffice"
+                {formData.role === "Backoffice"
                   ? "Full system access: user management, reports, all stations"
                   : formData.role === "StationOperator"
                   ? "Limited access: bookings, owners, assigned stations only"
@@ -231,12 +274,18 @@ export function CreateUserModal({
             </div>
 
             {/* Station Assignment for Station Operators */}
-            {formData.role === "StationOperator" &&
-              availableStations.length > 0 && (
-                <div className="space-y-2">
-                  <Label htmlFor="assignedStation">
-                    Assigned Charging Station *
-                  </Label>
+            {formData.role === "StationOperator" && (
+              <div className="space-y-2">
+                <Label htmlFor="assignedStation">
+                  Assigned Charging Station *
+                </Label>
+                {loading ? (
+                  <div className="flex items-center justify-center p-4 border rounded-md">
+                    <div className="text-sm text-muted-foreground">
+                      Loading available stations...
+                    </div>
+                  </div>
+                ) : availableStations.length > 0 ? (
                   <Select
                     value={formData.assignedStationId}
                     onValueChange={(value) =>
@@ -257,12 +306,18 @@ export function CreateUserModal({
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className="text-xs text-muted-foreground">
-                    Station operators can only be assigned to one charging
-                    station
+                ) : (
+                  <div className="flex items-center justify-center p-4 border rounded-md">
+                    <div className="text-sm text-muted-foreground">
+                      No stations available for assignment
+                    </div>
                   </div>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  Station operators can only be assigned to one charging station
                 </div>
-              )}
+              </div>
+            )}
           </div>
 
           {/* Security */}
@@ -307,8 +362,8 @@ export function CreateUserModal({
             >
               Cancel
             </Button>
-            <Button type="submit" variant="default">
-              Create User
+            <Button type="submit" variant="default" disabled={isSubmitting}>
+              {isSubmitting ? "Creating..." : "Create User"}
             </Button>
           </div>
         </form>

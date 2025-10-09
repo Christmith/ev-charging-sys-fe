@@ -32,7 +32,7 @@ interface NavItem {
   title: string;
   url: string;
   icon: React.ElementType;
-  roles: Array<"BackOffice" | "StationOperator">;
+  roles: Array<"Backoffice" | "StationOperator">;
 }
 
 const navigationItems: NavItem[] = [
@@ -40,49 +40,49 @@ const navigationItems: NavItem[] = [
     title: "Dashboard",
     url: "/dashboard",
     icon: LayoutDashboard,
-    roles: ["BackOffice", "StationOperator"],
+    roles: ["Backoffice", "StationOperator"],
   },
   {
     title: "Bookings",
     url: "/bookings",
     icon: Calendar,
-    roles: ["BackOffice", "StationOperator"],
+    roles: ["Backoffice", "StationOperator"],
   },
   {
     title: "EV Owners",
     url: "/owners",
     icon: Users,
-    roles: ["BackOffice", "StationOperator"],
+    roles: ["Backoffice", "StationOperator"],
   },
   {
     title: "Stations & Schedules",
     url: "/stations",
     icon: MapPin,
-    roles: ["BackOffice", "StationOperator"],
+    roles: ["Backoffice", "StationOperator"],
   },
   {
     title: "Web Users & Roles",
     url: "/users",
     icon: Shield,
-    roles: ["BackOffice"],
+    roles: ["Backoffice"],
   },
   {
     title: "Reports",
     url: "/reports",
     icon: BarChart3,
-    roles: ["BackOffice"],
+    roles: ["Backoffice"],
   },
   {
     title: "Audit Log",
     url: "/audit",
     icon: FileText,
-    roles: ["BackOffice"],
+    roles: ["Backoffice"],
   },
   {
     title: "Settings",
     url: "/settings",
     icon: Settings,
-    roles: ["BackOffice"],
+    roles: ["Backoffice"],
   },
 ];
 
@@ -185,9 +185,9 @@ export function AppSidebar() {
             <div className="text-xs text-sidebar-foreground/60">
               {user.role}
             </div>
-            {user.role === "StationOperator" && user.assignedStation && (
+            {user.role === "StationOperator" && user.assignedStationId && (
               <div className="text-xs text-sidebar-foreground/60 mt-1">
-                Station: {user.assignedStation}
+                Station: {user.assignedStationId}
               </div>
             )}
           </div>

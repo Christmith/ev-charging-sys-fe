@@ -39,12 +39,37 @@ api.interceptors.response.use(
 
     // Transform error for consistent handling
     const errorMessage =
-      (error.response?.data as any)?.message ||
+      (error.response?.data as { message?: string })?.message ||
       error.message ||
       "An unexpected error occurred";
 
     return Promise.reject(new Error(errorMessage));
   }
 );
+
+// Station API functions
+export const stationApi = {
+  // Get all stations available for assignment
+  getAllStationsForAssignment: async () => {
+    const response = await api.get("/Stations/stations/all-for-assignment");
+    return response.data;
+  },
+};
+
+// User API functions
+export const userApi = {
+  // Create operational user (Backoffice or StationOperator)
+  createOperationalUser: async (userData: {
+    email: string;
+    password: string;
+    role: "Backoffice" | "StationOperator";
+    fullName: string;
+    phone?: string;
+    assignedStationId?: string | null;
+  }) => {
+    const response = await api.post("/auth/create-operational-user", userData);
+    return response.data;
+  },
+};
 
 export default api;
