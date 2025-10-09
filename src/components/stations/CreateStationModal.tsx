@@ -34,24 +34,33 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Station } from "@/types/entities";
+import { stationApi } from "@/services/api";
 
-const stationSchema = z.object({
-  name: z.string().min(1, "Station name is required"),
-  code: z.string().optional(),
-  acSlots: z.number().min(0, "AC slots cannot be negative").max(20, "Maximum 20 AC slots allowed"),
-  dcSlots: z.number().min(0, "DC slots cannot be negative").max(20, "Maximum 20 DC slots allowed"),
-  addressLine1: z.string().min(1, "Address is required"),
-  addressLine2: z.string().optional(),
-  city: z.string().min(1, "City is required"),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
-  googlePlaceId: z.string().optional(),
-  operatorUserId: z.string().optional(),
-  notes: z.string().optional(),
-}).refine((data) => data.acSlots + data.dcSlots >= 1, {
-  message: "Station must have at least 1 charging slot (AC or DC)",
-  path: ["acSlots"],
-});
+const stationSchema = z
+  .object({
+    name: z.string().min(1, "Station name is required"),
+    code: z.string().optional(),
+    acSlots: z
+      .number()
+      .min(0, "AC slots cannot be negative")
+      .max(20, "Maximum 20 AC slots allowed"),
+    dcSlots: z
+      .number()
+      .min(0, "DC slots cannot be negative")
+      .max(20, "Maximum 20 DC slots allowed"),
+    addressLine1: z.string().min(1, "Address is required"),
+    addressLine2: z.string().optional(),
+    city: z.string().min(1, "City is required"),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    googlePlaceId: z.string().optional(),
+    operatorUserId: z.string().optional(),
+    notes: z.string().optional(),
+  })
+  .refine((data) => data.acSlots + data.dcSlots >= 1, {
+    message: "Station must have at least 1 charging slot (AC or DC)",
+    path: ["acSlots"],
+  });
 
 type StationFormData = z.infer<typeof stationSchema>;
 
@@ -68,13 +77,14 @@ const mockOperators = [
   { id: "user-3", name: "Mike Chen", email: "mike@station-ops.com" },
 ];
 
-export default function CreateStationModal({ 
-  open, 
-  onOpenChange, 
-  onStationCreated 
+export default function CreateStationModal({
+  open,
+  onOpenChange,
+  onStationCreated,
 }: CreateStationModalProps) {
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [generatingQR, setGeneratingQR] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<StationFormData>({
@@ -101,11 +111,34 @@ export default function CreateStationModal({
 
   const onSubmit = async (data: StationFormData) => {
     try {
+      setIsSubmitting(true);
+
       // Generate unique station code if not provided
       const stationCode = data.code || `STA-${Date.now().toString().slice(-3)}`;
-      
+
+      // Prepare API request payload
+      const apiData = {
+        stationName: data.name,
+        stationCode: stationCode,
+        acChargingSlots: data.acSlots,
+        dcChargingSlots: data.dcSlots,
+        stationOperatorIds: data.operatorUserId ? [data.operatorUserId] : [],
+        addressLine1: data.addressLine1,
+        addressLine2: data.addressLine2 || undefined,
+        city: data.city,
+        latitude: data.latitude.toString(),
+        longitude: data.longitude.toString(),
+        googlePlaceID: data.googlePlaceId || undefined,
+        additionalNotes: data.notes || undefined,
+        status: "Active" as const,
+      };
+
+      // Call the API
+      await stationApi.createStation(apiData);
+
+      // Create station object for local state update
       const newStation: Station = {
-        id: `station-${Date.now()}`, 
+        id: `station-${Date.now()}`, // This will be replaced by actual ID from API later
         name: data.name,
         code: stationCode,
         acSlots: data.acSlots,
@@ -122,7 +155,7 @@ export default function CreateStationModal({
       };
 
       onStationCreated(newStation);
-      
+
       toast({
         title: "Station Created Successfully",
         description: `${data.name} has been added to the network.`,
@@ -131,11 +164,15 @@ export default function CreateStationModal({
       onOpenChange(false);
       form.reset();
     } catch (error) {
+      console.error("Error creating station:", error);
       toast({
         title: "Error Creating Station",
-        description: "Please try again later.",
+        description:
+          error instanceof Error ? error.message : "Please try again later.",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -164,7 +201,7 @@ export default function CreateStationModal({
   const generateStationQR = async () => {
     setGeneratingQR(true);
     // Simulate QR code generation
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     setGeneratingQR(false);
     toast({
       title: "QR Code Generated",
@@ -184,7 +221,8 @@ export default function CreateStationModal({
             Create New Charging Station
           </DialogTitle>
           <DialogDescription>
-            Add a new EV charging station to the network with location, capacity, and operational details.
+            Add a new EV charging station to the network with location,
+            capacity, and operational details.
           </DialogDescription>
         </DialogHeader>
 
@@ -195,7 +233,9 @@ export default function CreateStationModal({
               <div className="space-y-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Station Information</CardTitle>
+                    <CardTitle className="text-lg">
+                      Station Information
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <FormField
@@ -205,7 +245,10 @@ export default function CreateStationModal({
                         <FormItem>
                           <FormLabel>Station Name *</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g., Central Mall Charging Hub" {...field} />
+                            <Input
+                              placeholder="e.g., Central Mall Charging Hub"
+                              {...field}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -219,13 +262,14 @@ export default function CreateStationModal({
                         <FormItem>
                           <FormLabel>Station Code</FormLabel>
                           <FormControl>
-                            <Input 
-                              placeholder="e.g., CMH-001 (auto-generated if empty)" 
-                              {...field} 
+                            <Input
+                              placeholder="e.g., CMH-001 (auto-generated if empty)"
+                              {...field}
                             />
                           </FormControl>
                           <FormDescription>
-                            Unique identifier for the station. Auto-generated if not provided.
+                            Unique identifier for the station. Auto-generated if
+                            not provided.
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -240,12 +284,14 @@ export default function CreateStationModal({
                           <FormItem>
                             <FormLabel>AC Charging Slots</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
-                                min="0" 
+                              <Input
+                                type="number"
+                                min="0"
                                 max="20"
                                 {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                onChange={(e) =>
+                                  field.onChange(parseInt(e.target.value) || 0)
+                                }
                               />
                             </FormControl>
                             <FormDescription>
@@ -263,12 +309,14 @@ export default function CreateStationModal({
                           <FormItem>
                             <FormLabel>DC Fast Charging Slots</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
-                                min="0" 
+                              <Input
+                                type="number"
+                                min="0"
                                 max="20"
                                 {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                onChange={(e) =>
+                                  field.onChange(parseInt(e.target.value) || 0)
+                                }
                               />
                             </FormControl>
                             <FormDescription>
@@ -286,7 +334,10 @@ export default function CreateStationModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Station Operator</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Assign operator (optional)" />
@@ -294,7 +345,10 @@ export default function CreateStationModal({
                             </FormControl>
                             <SelectContent>
                               {mockOperators.map((operator) => (
-                                <SelectItem key={operator.id} value={operator.id}>
+                                <SelectItem
+                                  key={operator.id}
+                                  value={operator.id}
+                                >
                                   {operator.name} - {operator.email}
                                 </SelectItem>
                               ))}
@@ -320,15 +374,21 @@ export default function CreateStationModal({
                       {hasAC && (
                         <>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">AC Power Output:</span>
+                            <span className="text-muted-foreground">
+                              AC Power Output:
+                            </span>
                             <Badge variant="outline">7-22 kW</Badge>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">AC Connector:</span>
+                            <span className="text-muted-foreground">
+                              AC Connector:
+                            </span>
                             <Badge variant="outline">Type 2</Badge>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">AC Charging Time:</span>
+                            <span className="text-muted-foreground">
+                              AC Charging Time:
+                            </span>
                             <Badge variant="outline">4-8 hours</Badge>
                           </div>
                         </>
@@ -336,21 +396,29 @@ export default function CreateStationModal({
                       {hasDC && (
                         <>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">DC Power Output:</span>
+                            <span className="text-muted-foreground">
+                              DC Power Output:
+                            </span>
                             <Badge variant="outline">50-150 kW</Badge>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">DC Connector:</span>
+                            <span className="text-muted-foreground">
+                              DC Connector:
+                            </span>
                             <Badge variant="outline">CCS/CHAdeMO</Badge>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">DC Charging Time:</span>
+                            <span className="text-muted-foreground">
+                              DC Charging Time:
+                            </span>
                             <Badge variant="outline">30-60 min</Badge>
                           </div>
                         </>
                       )}
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total Capacity:</span>
+                        <span className="text-muted-foreground">
+                          Total Capacity:
+                        </span>
                         <Badge variant="secondary">
                           {acSlots > 0 && `${acSlots} AC`}
                           {acSlots > 0 && dcSlots > 0 && " + "}
@@ -363,9 +431,9 @@ export default function CreateStationModal({
                     <Separator className="my-4" />
 
                     <div className="flex gap-2">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
+                      <Button
+                        type="button"
+                        variant="outline"
                         size="sm"
                         onClick={generateStationQR}
                         disabled={generatingQR}
@@ -374,11 +442,13 @@ export default function CreateStationModal({
                         <QrCode className="w-4 h-4 mr-2" />
                         {generatingQR ? "Generating..." : "Preview QR Code"}
                       </Button>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
+                      <Button
+                        type="button"
+                        variant="outline"
                         size="sm"
-                        onClick={() => setShowLocationPicker(!showLocationPicker)}
+                        onClick={() =>
+                          setShowLocationPicker(!showLocationPicker)
+                        }
                         className="flex-1"
                       >
                         <Settings className="w-4 h-4 mr-2" />
@@ -406,7 +476,10 @@ export default function CreateStationModal({
                         <FormItem>
                           <FormLabel>Address Line 1 *</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g., 123 Main Street" {...field} />
+                            <Input
+                              placeholder="e.g., 123 Main Street"
+                              {...field}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -420,7 +493,10 @@ export default function CreateStationModal({
                         <FormItem>
                           <FormLabel>Address Line 2</FormLabel>
                           <FormControl>
-                            <Input placeholder="Floor, Suite, Building (optional)" {...field} />
+                            <Input
+                              placeholder="Floor, Suite, Building (optional)"
+                              {...field}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -433,7 +509,10 @@ export default function CreateStationModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>City *</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select city" />
@@ -445,7 +524,9 @@ export default function CreateStationModal({
                               <SelectItem value="Galle">Galle</SelectItem>
                               <SelectItem value="Negombo">Negombo</SelectItem>
                               <SelectItem value="Jaffna">Jaffna</SelectItem>
-                              <SelectItem value="Batticaloa">Batticaloa</SelectItem>
+                              <SelectItem value="Batticaloa">
+                                Batticaloa
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -461,12 +542,14 @@ export default function CreateStationModal({
                           <FormItem>
                             <FormLabel>Latitude *</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
+                              <Input
+                                type="number"
                                 step="any"
                                 placeholder="6.9271"
                                 {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                                onChange={(e) =>
+                                  field.onChange(parseFloat(e.target.value))
+                                }
                               />
                             </FormControl>
                             <FormMessage />
@@ -481,12 +564,14 @@ export default function CreateStationModal({
                           <FormItem>
                             <FormLabel>Longitude *</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
+                              <Input
+                                type="number"
                                 step="any"
                                 placeholder="79.8612"
                                 {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                                onChange={(e) =>
+                                  field.onChange(parseFloat(e.target.value))
+                                }
                               />
                             </FormControl>
                             <FormMessage />
@@ -495,9 +580,9 @@ export default function CreateStationModal({
                       />
                     </div>
 
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       size="sm"
                       onClick={handleUseCurrentLocation}
                       className="w-full"
@@ -513,13 +598,14 @@ export default function CreateStationModal({
                         <FormItem>
                           <FormLabel>Google Place ID</FormLabel>
                           <FormControl>
-                            <Input 
+                            <Input
                               placeholder="ChIJX8... (for enhanced mapping)"
-                              {...field} 
+                              {...field}
                             />
                           </FormControl>
                           <FormDescription>
-                            Optional: Improves location accuracy and search visibility.
+                            Optional: Improves location accuracy and search
+                            visibility.
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -564,11 +650,12 @@ export default function CreateStationModal({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
+                disabled={isSubmitting}
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="accent">
-                Create Station
+              <Button type="submit" variant="accent" disabled={isSubmitting}>
+                {isSubmitting ? "Creating..." : "Create Station"}
               </Button>
             </div>
           </form>

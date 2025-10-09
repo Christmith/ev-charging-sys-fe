@@ -54,6 +54,26 @@ export const stationApi = {
     const response = await api.get("/Stations/stations/all-for-assignment");
     return response.data;
   },
+
+  // Create a new charging station
+  createStation: async (stationData: {
+    stationName: string;
+    stationCode?: string;
+    acChargingSlots: number;
+    dcChargingSlots: number;
+    stationOperatorIds?: string[];
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    latitude: string;
+    longitude: string;
+    googlePlaceID?: string;
+    additionalNotes?: string;
+    status: "Active" | "Inactive";
+  }) => {
+    const response = await api.post("/stations", stationData);
+    return response.data;
+  },
 };
 
 // User API functions
