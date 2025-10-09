@@ -10,7 +10,32 @@ export interface EVOwner {
   city: string;
   vehicleModel?: string;
   vehiclePlate?: string;
-  status: "ACTIVE" | "DEACTIVATED";
+  status: "Active" | "Deactivated";
+  createdAt: string;
+  updatedAt: string;
+}
+
+// API request structure for creating EV owner
+export interface CreateEvOwnerRequest {
+  email: string;
+  nic: string;
+  fullName: string;
+  phone: string;
+  address: string;
+  vehicleModel?: string;
+  licensePlate?: string;
+}
+
+// API response structure for EV owner
+export interface EvOwnerApiResponse {
+  nic: string;
+  email: string;
+  fullName: string;
+  phone: string;
+  address: string;
+  vehicleModel?: string;
+  licensePlate?: string;
+  status: "Active" | "Deactivated";
   createdAt: string;
   updatedAt: string;
 }

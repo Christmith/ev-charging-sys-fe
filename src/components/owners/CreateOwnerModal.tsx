@@ -1,11 +1,17 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { EVOwner } from "@/types/entities";
+import { evOwnerApi } from "@/services/api";
 
 interface CreateOwnerModalProps {
   open: boolean;
@@ -19,6 +25,7 @@ export function CreateOwnerModal({
   onOwnerCreated,
 }: CreateOwnerModalProps) {
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     nic: "",
     firstName: "",
@@ -32,11 +39,17 @@ export function CreateOwnerModal({
     vehiclePlate: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Basic validation
-    if (!formData.nic || !formData.firstName || !formData.lastName || !formData.phone || !formData.email) {
+    if (
+      !formData.nic ||
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.phone ||
+      !formData.email
+    ) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields",
@@ -45,39 +58,87 @@ export function CreateOwnerModal({
       return;
     }
 
-    // Create new owner
-    const newOwner: EVOwner = {
-      ...formData,
-      status: "ACTIVE",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    try {
+      setIsSubmitting(true);
 
-    onOwnerCreated(newOwner);
-    
-    toast({
-      title: "Success",
-      description: "EV Owner created successfully",
-    });
+      // Transform form data to API format
+      const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
+      const address = [
+        formData.addressLine1,
+        formData.addressLine2,
+        formData.city,
+      ]
+        .filter(Boolean)
+        .join(", ");
 
-    // Reset form and close modal
-    setFormData({
-      nic: "",
-      firstName: "",
-      lastName: "",
-      phone: "",
-      email: "",
-      addressLine1: "",
-      addressLine2: "",
-      city: "",
-      vehicleModel: "",
-      vehiclePlate: "",
-    });
-    onOpenChange(false);
+      const apiData = {
+        email: formData.email.trim(),
+        nic: formData.nic.trim(),
+        fullName,
+        phone: formData.phone.trim(),
+        address: address || formData.addressLine1, // Fallback to addressLine1 if no address components
+        vehicleModel: formData.vehicleModel?.trim() || undefined,
+        licensePlate: formData.vehiclePlate?.trim() || undefined,
+      };
+
+      // Call API to create owner
+      const response = await evOwnerApi.createEvOwner(apiData);
+
+      // Create local owner object for state update
+      const newOwner: EVOwner = {
+        nic: formData.nic,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        email: formData.email,
+        addressLine1: formData.addressLine1,
+        addressLine2: formData.addressLine2,
+        city: formData.city,
+        vehicleModel: formData.vehicleModel,
+        vehiclePlate: formData.vehiclePlate,
+        status: "Active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      onOwnerCreated(newOwner);
+
+      toast({
+        title: "Success",
+        description: response.message || "EV Owner created successfully",
+      });
+
+      // Reset form and close modal
+      setFormData({
+        nic: "",
+        firstName: "",
+        lastName: "",
+        phone: "",
+        email: "",
+        addressLine1: "",
+        addressLine2: "",
+        city: "",
+        vehicleModel: "",
+        vehiclePlate: "",
+      });
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Failed to create EV owner:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to create EV owner. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -91,7 +152,7 @@ export function CreateOwnerModal({
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Basic Information</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="nic">NIC (Primary Key) *</Label>
@@ -108,7 +169,9 @@ export function CreateOwnerModal({
                 <Input
                   id="firstName"
                   value={formData.firstName}
-                  onChange={(e) => handleInputChange("firstName", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("firstName", e.target.value)
+                  }
                   required
                 />
               </div>
@@ -128,7 +191,7 @@ export function CreateOwnerModal({
           {/* Contact Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Contact Information</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone *</Label>
@@ -156,13 +219,15 @@ export function CreateOwnerModal({
           {/* Address Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Address Information</h3>
-            
+
             <div className="space-y-2">
               <Label htmlFor="addressLine1">Address Line 1</Label>
               <Input
                 id="addressLine1"
                 value={formData.addressLine1}
-                onChange={(e) => handleInputChange("addressLine1", e.target.value)}
+                onChange={(e) =>
+                  handleInputChange("addressLine1", e.target.value)
+                }
                 placeholder="123 Main Street"
               />
             </div>
@@ -172,7 +237,9 @@ export function CreateOwnerModal({
               <Input
                 id="addressLine2"
                 value={formData.addressLine2}
-                onChange={(e) => handleInputChange("addressLine2", e.target.value)}
+                onChange={(e) =>
+                  handleInputChange("addressLine2", e.target.value)
+                }
                 placeholder="Apartment, suite, etc."
               />
             </div>
@@ -190,15 +257,19 @@ export function CreateOwnerModal({
 
           {/* Vehicle Information */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Vehicle Information (Optional)</h3>
-            
+            <h3 className="text-lg font-semibold">
+              Vehicle Information (Optional)
+            </h3>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="vehicleModel">Vehicle Model</Label>
                 <Input
                   id="vehicleModel"
                   value={formData.vehicleModel}
-                  onChange={(e) => handleInputChange("vehicleModel", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("vehicleModel", e.target.value)
+                  }
                   placeholder="Tesla Model 3"
                 />
               </div>
@@ -207,7 +278,9 @@ export function CreateOwnerModal({
                 <Input
                   id="vehiclePlate"
                   value={formData.vehiclePlate}
-                  onChange={(e) => handleInputChange("vehiclePlate", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("vehiclePlate", e.target.value)
+                  }
                   placeholder="ABC-1234"
                 />
               </div>
@@ -216,11 +289,16 @@ export function CreateOwnerModal({
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-6 border-t">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
-            <Button type="submit" variant="default">
-              Create EV Owner
+            <Button type="submit" variant="default" disabled={isSubmitting}>
+              {isSubmitting ? "Creating..." : "Create EV Owner"}
             </Button>
           </div>
         </form>

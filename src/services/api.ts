@@ -154,4 +154,60 @@ export const userApi = {
   },
 };
 
+// EV Owner API functions
+export const evOwnerApi = {
+  // Create a new EV owner
+  createEvOwner: async (ownerData: {
+    email: string;
+    nic: string;
+    fullName: string;
+    phone: string;
+    address: string;
+    vehicleModel?: string;
+    licensePlate?: string;
+  }) => {
+    const response = await api.post("/Admin/create-evowner", ownerData);
+    return response.data;
+  },
+
+  // Get all EV owners
+  getAllEvOwners: async () => {
+    const response = await api.get("/evowners");
+    return response.data;
+  },
+
+  // Update an existing EV owner
+  updateEvOwner: async (
+    nic: string,
+    ownerData: {
+      fullName?: string;
+      phone?: string;
+      address?: string;
+      vehicleModel?: string;
+      licensePlate?: string;
+      status?: string;
+    }
+  ) => {
+    const response = await api.patch(`/evowners/${nic}`, ownerData);
+    return response.data;
+  },
+
+  // Delete an EV owner
+  deleteEvOwner: async (nic: string) => {
+    const response = await api.delete(`/evowners/${nic}`);
+    return response.data;
+  },
+
+  // Update EV owner status (activate/deactivate)
+  updateEvOwnerStatus: async (
+    nic: string,
+    status: "Active" | "Deactivated"
+  ) => {
+    const response = await api.patch(`/evowners/${nic}`, {
+      status,
+    });
+    return response.data;
+  },
+};
+
 export default api;

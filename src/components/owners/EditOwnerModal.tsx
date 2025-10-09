@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { EVOwner } from "@/types/entities";
 import { Trash2 } from "lucide-react";
+import { evOwnerApi } from "@/services/api";
 
 interface EditOwnerModalProps {
   open: boolean;
@@ -24,6 +30,8 @@ export function EditOwnerModal({
   onOwnerDeleted,
 }: EditOwnerModalProps) {
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     nic: "",
     firstName: "",
@@ -54,13 +62,13 @@ export function EditOwnerModal({
     }
   }, [owner]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!owner) return;
 
     // Basic validation
-    if (!formData.firstName || !formData.lastName || !formData.phone || !formData.email) {
+    if (!formData.firstName || !formData.lastName || !formData.phone) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields",
@@ -69,38 +77,101 @@ export function EditOwnerModal({
       return;
     }
 
-    // Update owner
-    const updatedOwner: EVOwner = {
-      ...owner,
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      phone: formData.phone,
-      email: formData.email,
-      addressLine1: formData.addressLine1,
-      addressLine2: formData.addressLine2,
-      city: formData.city,
-      vehicleModel: formData.vehicleModel,
-      vehiclePlate: formData.vehiclePlate,
-      updatedAt: new Date().toISOString(),
-    };
+    try {
+      setIsSubmitting(true);
 
-    onOwnerUpdated(updatedOwner);
-    
-    toast({
-      title: "Success",
-      description: "EV Owner updated successfully",
-    });
+      // Transform form data to API format
+      const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
+      const address = [
+        formData.addressLine1,
+        formData.addressLine2,
+        formData.city,
+      ]
+        .filter(Boolean)
+        .join(", ");
 
-    onOpenChange(false);
+      const apiData = {
+        fullName,
+        phone: formData.phone.trim(),
+        address: address || formData.addressLine1, // Fallback to addressLine1 if no address components
+        vehicleModel: formData.vehicleModel?.trim() || undefined,
+        licensePlate: formData.vehiclePlate?.trim() || undefined,
+      };
+
+      // Call API to update owner
+      await evOwnerApi.updateEvOwner(owner.nic, apiData);
+
+      // Create updated owner object for local state
+      const updatedOwner: EVOwner = {
+        ...owner,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        email: formData.email,
+        addressLine1: formData.addressLine1,
+        addressLine2: formData.addressLine2,
+        city: formData.city,
+        vehicleModel: formData.vehicleModel,
+        vehiclePlate: formData.vehiclePlate,
+        updatedAt: new Date().toISOString(),
+      };
+
+      onOwnerUpdated(updatedOwner);
+
+      toast({
+        title: "Success",
+        description: "EV Owner updated successfully",
+      });
+
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Failed to update EV owner:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to update EV owner. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!owner) return;
-    onOwnerDeleted(owner.nic);
+
+    try {
+      setIsDeleting(true);
+
+      // Call API to delete owner
+      await evOwnerApi.deleteEvOwner(owner.nic);
+
+      toast({
+        title: "Success",
+        description: "EV Owner deleted successfully",
+      });
+
+      onOwnerDeleted(owner.nic);
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Failed to delete EV owner:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete EV owner. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   if (!owner) return null;
@@ -116,7 +187,7 @@ export function EditOwnerModal({
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Basic Information</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="nic">NIC (Primary Key)</Label>
@@ -135,7 +206,9 @@ export function EditOwnerModal({
                 <Input
                   id="firstName"
                   value={formData.firstName}
-                  onChange={(e) => handleInputChange("firstName", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("firstName", e.target.value)
+                  }
                   required
                 />
               </div>
@@ -155,7 +228,7 @@ export function EditOwnerModal({
           {/* Contact Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Contact Information</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone *</Label>
@@ -182,13 +255,15 @@ export function EditOwnerModal({
           {/* Address Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Address Information</h3>
-            
+
             <div className="space-y-2">
               <Label htmlFor="addressLine1">Address Line 1</Label>
               <Input
                 id="addressLine1"
                 value={formData.addressLine1}
-                onChange={(e) => handleInputChange("addressLine1", e.target.value)}
+                onChange={(e) =>
+                  handleInputChange("addressLine1", e.target.value)
+                }
               />
             </div>
 
@@ -197,7 +272,9 @@ export function EditOwnerModal({
               <Input
                 id="addressLine2"
                 value={formData.addressLine2}
-                onChange={(e) => handleInputChange("addressLine2", e.target.value)}
+                onChange={(e) =>
+                  handleInputChange("addressLine2", e.target.value)
+                }
               />
             </div>
 
@@ -214,14 +291,16 @@ export function EditOwnerModal({
           {/* Vehicle Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Vehicle Information</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="vehicleModel">Vehicle Model</Label>
                 <Input
                   id="vehicleModel"
                   value={formData.vehicleModel}
-                  onChange={(e) => handleInputChange("vehicleModel", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("vehicleModel", e.target.value)
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -229,7 +308,9 @@ export function EditOwnerModal({
                 <Input
                   id="vehiclePlate"
                   value={formData.vehiclePlate}
-                  onChange={(e) => handleInputChange("vehiclePlate", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("vehiclePlate", e.target.value)
+                  }
                 />
               </div>
             </div>
@@ -242,17 +323,27 @@ export function EditOwnerModal({
               variant="destructive"
               onClick={handleDelete}
               className="gap-2"
+              disabled={isSubmitting || isDeleting}
             >
               <Trash2 className="w-4 h-4" />
-              Delete Owner
+              {isDeleting ? "Deleting..." : "Delete Owner"}
             </Button>
-            
+
             <div className="flex gap-3">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isSubmitting || isDeleting}
+              >
                 Cancel
               </Button>
-              <Button type="submit" variant="default">
-                Update Owner
+              <Button
+                type="submit"
+                variant="default"
+                disabled={isSubmitting || isDeleting}
+              >
+                {isSubmitting ? "Updating..." : "Update Owner"}
               </Button>
             </div>
           </div>

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { EVOwner } from "@/types/entities";
+import { EVOwner, EvOwnerApiResponse } from "@/types/entities";
 import { CreateOwnerModal } from "@/components/owners/CreateOwnerModal";
 import { EditOwnerModal } from "@/components/owners/EditOwnerModal";
 import { ViewUserModal } from "@/components/bookings/ViewUserModal";
@@ -37,73 +37,44 @@ import { ConfirmationDialog } from "@/components/bookings/ConfirmationDialog";
 import { ReactivationDialog } from "@/components/owners/ReactivationDialog";
 import { usePagination } from "@/hooks/usePagination";
 import { DataPagination } from "@/components/ui/data-pagination";
+import { evOwnerApi } from "@/services/api";
 
-// Mock data - replace with API calls
-const mockOwners: EVOwner[] = [
-  {
-    nic: "123456789V",
-    firstName: "John",
-    lastName: "Doe",
-    phone: "+94771234567",
-    email: "john.doe@email.com",
-    addressLine1: "123 Main Street",
-    city: "Colombo",
-    vehicleModel: "Tesla Model 3",
-    vehiclePlate: "ABC-1234",
-    status: "ACTIVE",
-    createdAt: "2024-01-15T10:00:00Z",
-    updatedAt: "2024-01-15T10:00:00Z",
-  },
-  {
-    nic: "987654321V",
-    firstName: "Jane",
-    lastName: "Smith",
-    phone: "+94772345678",
-    email: "jane.smith@email.com",
-    addressLine1: "456 Oak Avenue",
-    addressLine2: "Apartment 3B",
-    city: "Kandy",
-    vehicleModel: "Nissan Leaf",
-    vehiclePlate: "XYZ-5678",
-    status: "ACTIVE",
-    createdAt: "2024-02-20T14:30:00Z",
-    updatedAt: "2024-11-01T09:15:00Z",
-  },
-  {
-    nic: "456789123V",
-    firstName: "Bob",
-    lastName: "Wilson",
-    phone: "+94773456789",
-    email: "bob.wilson@email.com",
-    addressLine1: "789 Pine Road",
-    city: "Galle",
-    vehicleModel: "BMW i3",
-    status: "DEACTIVATED",
-    createdAt: "2024-03-10T11:45:00Z",
-    updatedAt: "2024-10-15T16:20:00Z",
-  },
-  {
-    nic: "789123456V",
-    firstName: "Alice",
-    lastName: "Johnson",
-    phone: "+94774567890",
-    email: "alice.johnson@email.com",
-    addressLine1: "321 Cedar Lane",
-    city: "Colombo",
-    vehicleModel: "Hyundai Kona Electric",
-    vehiclePlate: "DEF-9012",
-    status: "ACTIVE",
-    createdAt: "2024-04-05T08:20:00Z",
-    updatedAt: "2024-04-05T08:20:00Z",
-  },
-];
+// Transform API response to internal EVOwner format
+const transformApiResponseToOwner = (apiOwner: EvOwnerApiResponse): EVOwner => {
+  // Split fullName into firstName and lastName
+  const nameParts = apiOwner.fullName.trim().split(" ");
+  const firstName = nameParts[0] || "";
+  const lastName = nameParts.slice(1).join(" ") || "";
+
+  // Split address into components (basic parsing)
+  const addressParts = apiOwner.address.split(",").map((part) => part.trim());
+  const addressLine1 = addressParts[0] || "";
+  const addressLine2 = addressParts[1] || undefined;
+  const city = addressParts[addressParts.length - 1] || "";
+
+  return {
+    nic: apiOwner.nic,
+    firstName,
+    lastName,
+    phone: apiOwner.phone,
+    email: apiOwner.email,
+    addressLine1,
+    addressLine2,
+    city: addressParts.length > 2 ? city : "", // Only set city if we have more than 2 address parts
+    vehicleModel: apiOwner.vehicleModel,
+    vehiclePlate: apiOwner.licensePlate,
+    status: apiOwner.status,
+    createdAt: apiOwner.createdAt,
+    updatedAt: apiOwner.updatedAt,
+  };
+};
 
 function StatusBadge({ status }: { status: EVOwner["status"] }) {
   return (
     <Badge
       variant="outline"
       className={
-        status === "ACTIVE"
+        status === "Active"
           ? "bg-success/10 text-success border-success/20"
           : "bg-muted text-muted-foreground border-muted/20"
       }
@@ -125,19 +96,43 @@ export default function Owners() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [owners, setOwners] = useState<EVOwner[]>(mockOwners);
+  const [owners, setOwners] = useState<EVOwner[]>([]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  
+  const [isLoading, setIsLoading] = useState(true);
+
   // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedOwner, setSelectedOwner] = useState<EVOwner | null>(null);
-  
+
   // Confirmation dialog states
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [reactivateConfirmOpen, setReactivateConfirmOpen] = useState(false);
   const [ownerToAction, setOwnerToAction] = useState<EVOwner | null>(null);
+
+  // Fetch owners from API
+  useEffect(() => {
+    const fetchOwners = async () => {
+      try {
+        setIsLoading(true);
+        const apiOwners = await evOwnerApi.getAllEvOwners();
+        const transformedOwners = apiOwners.map(transformApiResponseToOwner);
+        setOwners(transformedOwners);
+      } catch (error) {
+        console.error("Failed to fetch EV owners:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load EV owners. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchOwners();
+  }, [toast]);
 
   const filteredOwners = owners.filter((owner) => {
     const matchesSearch =
@@ -160,79 +155,128 @@ export default function Owners() {
 
   // Reset to first page when filters change
   useEffect(() => {
-    pagination.resetToFirstPage();
-  }, [searchTerm, statusFilter]);
+    if (pagination) {
+      pagination.resetToFirstPage();
+    }
+  }, [searchTerm, statusFilter, pagination]);
 
-  const activeOwners = owners.filter((o) => o.status === "ACTIVE").length;
+  const activeOwners = owners.filter((o) => o.status === "Active").length;
   const deactivatedOwners = owners.filter(
-    (o) => o.status === "DEACTIVATED"
+    (o) => o.status === "Deactivated"
   ).length;
 
   // Handler functions
   const handleCreateOwner = (newOwner: EVOwner) => {
-    setOwners(prev => [...prev, newOwner]);
+    setOwners((prev) => [...prev, newOwner]);
   };
 
   const handleUpdateOwner = (updatedOwner: EVOwner) => {
-    setOwners(prev => 
-      prev.map(owner => 
+    setOwners((prev) =>
+      prev.map((owner) =>
         owner.nic === updatedOwner.nic ? updatedOwner : owner
       )
     );
   };
 
   const handleDeleteOwner = (nic: string) => {
-    setOwnerToAction(owners.find(o => o.nic === nic) || null);
+    setOwnerToAction(owners.find((o) => o.nic === nic) || null);
     setDeleteConfirmOpen(true);
   };
 
-  const confirmDeleteOwner = () => {
+  const confirmDeleteOwner = async () => {
     if (ownerToAction) {
-      setOwners(prev => prev.filter(owner => owner.nic !== ownerToAction.nic));
-      toast({
-        title: "Success",
-        description: "EV Owner deleted successfully",
-      });
+      try {
+        await evOwnerApi.deleteEvOwner(ownerToAction.nic);
+
+        setOwners((prev) =>
+          prev.filter((owner) => owner.nic !== ownerToAction.nic)
+        );
+        toast({
+          title: "Success",
+          description: "EV Owner deleted successfully",
+        });
+      } catch (error) {
+        console.error("Failed to delete owner:", error);
+        toast({
+          title: "Error",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Failed to delete owner. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
     setDeleteConfirmOpen(false);
     setOwnerToAction(null);
     setEditModalOpen(false);
   };
 
-  const handleStatusChange = (owner: EVOwner, newStatus: EVOwner["status"]) => {
-    if (newStatus === "ACTIVE") {
+  const handleStatusChange = async (
+    owner: EVOwner,
+    newStatus: EVOwner["status"]
+  ) => {
+    if (newStatus === "Active") {
       setOwnerToAction(owner);
       setReactivateConfirmOpen(true);
     } else {
-      const updatedOwner = {
-        ...owner,
-        status: newStatus,
-        updatedAt: new Date().toISOString(),
-      };
-      setOwners(prev => 
-        prev.map(o => o.nic === owner.nic ? updatedOwner : o)
-      );
-      toast({
-        title: "Success",
-        description: `Owner ${newStatus.toLowerCase()} successfully`,
-      });
+      try {
+        await evOwnerApi.updateEvOwnerStatus(owner.nic, newStatus);
+
+        const updatedOwner = {
+          ...owner,
+          status: newStatus,
+          updatedAt: new Date().toISOString(),
+        };
+        setOwners((prev) =>
+          prev.map((o) => (o.nic === owner.nic ? updatedOwner : o))
+        );
+        toast({
+          title: "Success",
+          description: `Owner ${newStatus.toLowerCase()} successfully`,
+        });
+      } catch (error) {
+        console.error("Failed to update owner status:", error);
+        toast({
+          title: "Error",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Failed to update owner status. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
-  const confirmReactivateOwner = () => {
+  const confirmReactivateOwner = async () => {
     if (ownerToAction) {
-      const updatedOwner = {
-        ...ownerToAction,
-        status: "ACTIVE" as const,
-        updatedAt: new Date().toISOString(),
-      };
-      setOwners(prev => 
-        prev.map(o => o.nic === ownerToAction.nic ? updatedOwner : o)
-      );
-      toast({
-        title: "Success",
-        description: "Owner reactivated successfully",
-      });
+      try {
+        await evOwnerApi.updateEvOwnerStatus(ownerToAction.nic, "Active");
+
+        const updatedOwner = {
+          ...ownerToAction,
+          status: "Active" as const,
+          updatedAt: new Date().toISOString(),
+        };
+        setOwners((prev) =>
+          prev.map((o) => (o.nic === ownerToAction.nic ? updatedOwner : o))
+        );
+        toast({
+          title: "Success",
+          description: "Owner reactivated successfully",
+        });
+      } catch (error) {
+        console.error("Failed to reactivate owner:", error);
+        toast({
+          title: "Error",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Failed to reactivate owner. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
     setReactivateConfirmOpen(false);
     setOwnerToAction(null);
@@ -260,7 +304,11 @@ export default function Owners() {
             Manage EV owner profiles and account status (NIC as primary key)
           </p>
         </div>
-        <Button variant="accent" className="gap-2" onClick={() => setCreateModalOpen(true)}>
+        <Button
+          variant="accent"
+          className="gap-2"
+          onClick={() => setCreateModalOpen(true)}
+        >
           <Plus className="w-4 h-4" />
           Add EV Owner
         </Button>
@@ -339,8 +387,8 @@ export default function Owners() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="ACTIVE">Active</SelectItem>
-                <SelectItem value="DEACTIVATED">Deactivated</SelectItem>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Deactivated">Deactivated</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -389,23 +437,33 @@ export default function Owners() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pagination.currentItems.map((owner) => (
-                  <TableRow key={owner.nic}>
-                    <TableCell className="font-mono font-medium">
-                      {formatNIC(owner.nic)}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">
-                          {owner.firstName} {owner.lastName}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Joined{" "}
-                          {new Date(owner.createdAt).toLocaleDateString()}
-                        </div>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12">
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                        <span className="ml-2">Loading EV owners...</span>
                       </div>
                     </TableCell>
-                    {/* <TableCell>
+                  </TableRow>
+                ) : (
+                  pagination.currentItems.map((owner) => (
+                    <TableRow key={owner.nic}>
+                      <TableCell className="font-mono font-medium">
+                        {formatNIC(owner.nic)}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">
+                            {owner.firstName} {owner.lastName}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Joined{" "}
+                            {new Date(owner.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </TableCell>
+                      {/* <TableCell>
                       <div className="space-y-1">
                         <div className="flex items-center gap-1 text-sm">
                           <Mail className="w-3 h-3 text-muted-foreground" />
@@ -417,87 +475,92 @@ export default function Owners() {
                         </div>
                       </div>
                     </TableCell> */}
-                    <TableCell>
-                      <div className="flex items-start gap-1">
-                        <MapPin className="w-3 h-3 text-muted-foreground mt-1" />
-                        <div className="text-sm">
-                          <div>{owner.addressLine1}</div>
-                          {owner.addressLine2 && (
-                            <div className="text-muted-foreground">
-                              {owner.addressLine2}
-                            </div>
-                          )}
-                          <div className="text-muted-foreground">
-                            {owner.city}
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {owner.vehicleModel ? (
+                      <TableCell>
                         <div className="flex items-start gap-1">
-                          <Car className="w-3 h-3 text-muted-foreground mt-1" />
+                          <MapPin className="w-3 h-3 text-muted-foreground mt-1" />
                           <div className="text-sm">
-                            <div>{owner.vehicleModel}</div>
-                            {owner.vehiclePlate && (
-                              <div className="text-muted-foreground font-mono">
-                                {owner.vehiclePlate}
+                            <div>{owner.addressLine1}</div>
+                            {owner.addressLine2 && (
+                              <div className="text-muted-foreground">
+                                {owner.addressLine2}
                               </div>
                             )}
+                            <div className="text-muted-foreground">
+                              {owner.city}
+                            </div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="text-sm text-muted-foreground">
-                          Not specified
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={owner.status} />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleViewOwner(owner)}
-                        >
-                          View
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleEditOwner(owner)}
-                        >
-                          Edit
-                        </Button>
-                        {owner.status === "ACTIVE" ? (
-                          <Button 
-                            variant="destructive" 
-                            size="sm"
-                            onClick={() => handleStatusChange(owner, "DEACTIVATED")}
-                          >
-                            Deactivate
-                          </Button>
+                      </TableCell>
+                      <TableCell>
+                        {owner.vehicleModel ? (
+                          <div className="flex items-start gap-1">
+                            <Car className="w-3 h-3 text-muted-foreground mt-1" />
+                            <div className="text-sm">
+                              <div>{owner.vehicleModel}</div>
+                              {owner.vehiclePlate && (
+                                <div className="text-muted-foreground font-mono">
+                                  {owner.vehiclePlate}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         ) : (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="text-green-600 border-green-600 hover:bg-green-50"
-                            onClick={() => handleStatusChange(owner, "ACTIVE")}
-                          >
-                            Reactivate
-                          </Button>
+                          <div className="text-sm text-muted-foreground">
+                            Not specified
+                          </div>
                         )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={owner.status} />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewOwner(owner)}
+                          >
+                            View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditOwner(owner)}
+                          >
+                            Edit
+                          </Button>
+                          {owner.status === "Active" ? (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() =>
+                                handleStatusChange(owner, "Deactivated")
+                              }
+                            >
+                              Deactivate
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-green-600 border-green-600 hover:bg-green-50"
+                              onClick={() =>
+                                handleStatusChange(owner, "Active")
+                              }
+                            >
+                              Reactivate
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
 
-          {filteredOwners.length === 0 && (
+          {filteredOwners.length === 0 && !isLoading && (
             <div className="text-center py-12">
               <User className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
               <div className="text-lg font-medium mb-2">No EV owners found</div>
@@ -536,7 +599,7 @@ export default function Owners() {
               onLastPage={pagination.goToLastPage}
             />
           </div>
-         )}
+        )}
       </Card>
 
       {/* Modals */}
