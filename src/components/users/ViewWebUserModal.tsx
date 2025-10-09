@@ -40,14 +40,12 @@ export function ViewWebUserModal({
         : "No stations assigned";
     }
 
-    return user.assignedStationId
-      .map((id) => {
-        const station = availableStations.find((s) => s.id === id);
-        return station
-          ? `${station.name}${station.code ? ` (${station.code})` : ""}`
-          : id;
-      })
-      .join(", ");
+    const station = availableStations.find(
+      (s) => s.id === user.assignedStationId
+    );
+    return station
+      ? `${station.name}${station.code ? ` (${station.code})` : ""}`
+      : user.assignedStationId;
   };
 
   const getRoleIcon = () => {
@@ -162,7 +160,7 @@ export function ViewWebUserModal({
                   </div>
                   {user.assignedStationId && (
                     <div className="text-xs text-muted-foreground mt-2">
-                      Total: {user.assignedStationId} station
+                      Total: 1 station
                     </div>
                   )}
                 </div>
