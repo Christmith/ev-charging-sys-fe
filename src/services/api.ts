@@ -70,6 +70,12 @@ export const userApi = {
     const response = await api.post("/auth/create-operational-user", userData);
     return response.data;
   },
+
+  // Get all operational users
+  getOperationalUsers: async () => {
+    const response = await api.get("/admin/operational-users");
+    return response.data;
+  },
 };
 
 export default api;

@@ -20,6 +20,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
 import { WebUser } from "@/types/auth";
 import { CreateUserModal } from "@/components/users/CreateUserModal";
@@ -30,7 +36,7 @@ import { ConfirmationDialog } from "@/components/bookings/ConfirmationDialog";
 import { useToast } from "@/hooks/use-toast";
 import { usePagination } from "@/hooks/usePagination";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { stationApi } from "@/services/api";
+import { stationApi, userApi } from "@/services/api";
 
 // Station type for assignment
 type StationForAssignment = {
@@ -39,51 +45,19 @@ type StationForAssignment = {
   stationCode: string;
 };
 
-// Mock data - replace with API calls
-const mockUsers: WebUser[] = [
-  {
-    id: "1",
-    email: "admin@evsystem.com",
-    fullName: "Admin User",
-    role: "Backoffice",
-    phone: "+94771234567",
-    status: "Active",
-    createdAt: "2024-01-01T10:00:00Z",
-    updatedAt: "2024-01-01T10:00:00Z",
-  },
-  {
-    id: "2",
-    email: "operator@evsystem.com",
-    fullName: "Station Operator",
-    role: "StationOperator",
-    phone: "+94772345678",
-    assignedStationId: "station-1",
-    status: "Active",
-    createdAt: "2024-02-15T14:30:00Z",
-    updatedAt: "2024-02-15T14:30:00Z",
-  },
-  {
-    id: "3",
-    email: "john.manager@evsystem.com",
-    fullName: "John Manager",
-    phone: "+94773456789",
-    role: "Backoffice",
-    status: "Active",
-    createdAt: "2024-03-10T11:20:00Z",
-    updatedAt: "2024-03-10T11:20:00Z",
-  },
-  {
-    id: "4",
-    fullName: "Jane Operator",
-    email: "jane.operator@evsystem.com",
-    phone: "+94774567890",
-    role: "StationOperator",
-    assignedStationId: "station-3",
-    status: "Inactive",
-    createdAt: "2024-04-05T09:15:00Z",
-    updatedAt: "2024-11-25T10:30:00Z",
-  },
-];
+// API response type for operational users
+type ApiOperationalUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  phone: string;
+  role: "Backoffice" | "StationOperator";
+  status: "Active" | "Inactive";
+  assignedStationId: string | null;
+  assignedStationName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
 function RoleBadge({ role }: { role: WebUser["role"] }) {
   return (
@@ -121,12 +95,13 @@ export default function Users() {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [users, setUsers] = useState<WebUser[]>(mockUsers);
+  const [users, setUsers] = useState<WebUser[]>([]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [availableStations, setAvailableStations] = useState<
     StationForAssignment[]
   >([]);
   const [stationsLoading, setStationsLoading] = useState(false);
+  const [usersLoading, setUsersLoading] = useState(false);
 
   // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -163,7 +138,7 @@ export default function Users() {
   // Reset to first page when filters change
   useEffect(() => {
     pagination.resetToFirstPage();
-  }, [searchTerm, roleFilter, statusFilter]);
+  }, [searchTerm, roleFilter, statusFilter, pagination]);
 
   // Fetch available stations for assignment
   useEffect(() => {
@@ -185,7 +160,45 @@ export default function Users() {
     };
 
     fetchStations();
-  }, []);
+  }, [toast]);
+
+  // Fetch operational users
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setUsersLoading(true);
+        const apiUsers = await userApi.getOperationalUsers();
+
+        // Map API response to WebUser type
+        const mappedUsers: WebUser[] = apiUsers.map(
+          (apiUser: ApiOperationalUser) => ({
+            id: apiUser.id,
+            email: apiUser.email,
+            fullName: apiUser.fullName,
+            phone: apiUser.phone,
+            role: apiUser.role,
+            status: apiUser.status,
+            assignedStationId: apiUser.assignedStationId,
+            createdAt: apiUser.createdAt,
+            updatedAt: apiUser.updatedAt,
+          })
+        );
+
+        setUsers(mappedUsers);
+      } catch (error) {
+        console.error("Failed to fetch users:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load users",
+          variant: "destructive",
+        });
+      } finally {
+        setUsersLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, [toast]);
 
   // Only BackOffice users can access this page
   if (user?.role !== "Backoffice") {
@@ -199,12 +212,32 @@ export default function Users() {
   const activeUsers = users.filter((u) => u.status === "Active").length;
 
   // Handlers
-  const handleCreateUser = (newUser: WebUser) => {
-    setUsers((prev) => [...prev, newUser]);
-    toast({
-      title: "Success",
-      description: "User created successfully",
-    });
+  const handleCreateUser = async (newUser: WebUser) => {
+    try {
+      // Refresh users list from API
+      const apiUsers = await userApi.getOperationalUsers();
+
+      // Map API response to WebUser type
+      const mappedUsers: WebUser[] = apiUsers.map(
+        (apiUser: ApiOperationalUser) => ({
+          id: apiUser.id,
+          email: apiUser.email,
+          fullName: apiUser.fullName,
+          phone: apiUser.phone,
+          role: apiUser.role,
+          status: apiUser.status,
+          assignedStationId: apiUser.assignedStationId,
+          createdAt: apiUser.createdAt,
+          updatedAt: apiUser.updatedAt,
+        })
+      );
+
+      setUsers(mappedUsers);
+    } catch (error) {
+      console.error("Failed to refresh users:", error);
+      // Fallback to local update if API fails
+      setUsers((prev) => [...prev, newUser]);
+    }
   };
 
   const handleUpdateUser = (updatedUser: WebUser) => {
@@ -423,124 +456,157 @@ export default function Users() {
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User Details</TableHead>
-                  <TableHead>Contact Info</TableHead>
-                  <TableHead>Role & Access</TableHead>
-                  <TableHead>Assigned Stations</TableHead>
-                  <TableHead>Status & Activity</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pagination.currentItems.map((webUser) => (
-                  <TableRow key={webUser.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{webUser.fullName}</div>
-                        <div className="text-sm text-muted-foreground">
-                          ID: {webUser.id}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Joined{" "}
-                          {new Date(webUser.createdAt).toLocaleDateString()}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="text-sm">{webUser.email}</div>
-                        {webUser.phone && (
-                          <div className="text-sm text-muted-foreground">
-                            {webUser.phone}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <RoleBadge role={webUser.role} />
-                    </TableCell>
-                    <TableCell>
-                      {webUser.assignedStationId ? (
-                        <div className="text-sm">
-                          <div className="font-medium">
-                            {availableStations.find(
-                              (s) => s.id === webUser.assignedStationId
-                            )?.stationName || "Unknown Station"}
-                          </div>
-                          <div className="text-muted-foreground">
-                            {availableStations.find(
-                              (s) => s.id === webUser.assignedStationId
-                            )?.stationCode || ""}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-muted-foreground">
-                          {webUser.role === "Backoffice"
-                            ? "All stations"
-                            : "None assigned"}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-2">
-                        <StatusBadge status={webUser.status} />
-                        <div className="text-xs text-muted-foreground">
-                          Updated{" "}
-                          {new Date(
-                            webUser.updatedAt || webUser.createdAt || ""
-                          ).toLocaleDateString()}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleViewUser(webUser)}
-                        >
-                          View
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditUser(webUser)}
-                        >
-                          Edit
-                        </Button>
-                        {webUser.status === "Active" ? (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() =>
-                              handleStatusAction(webUser, "disable")
-                            }
-                          >
-                            Disable
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="success"
-                            size="sm"
-                            onClick={() =>
-                              handleStatusAction(webUser, "enable")
-                            }
-                          >
-                            Enable
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
+            <TooltipProvider>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User Details</TableHead>
+                    <TableHead>Contact Info</TableHead>
+                    <TableHead>Role & Access</TableHead>
+                    <TableHead>Assigned Stations</TableHead>
+                    <TableHead>Status & Activity</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {usersLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8">
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          <span className="text-muted-foreground">
+                            Loading users...
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    pagination.currentItems.map((webUser) => (
+                      <TableRow key={webUser.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">
+                              {webUser.fullName}
+                            </div>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="text-sm text-muted-foreground truncate max-w-[120px] cursor-help">
+                                  ID: {webUser.id}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{webUser.id}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <div className="text-xs text-muted-foreground">
+                              Joined{" "}
+                              {new Date(webUser.createdAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="text-sm truncate max-w-[180px] cursor-help">
+                                  {webUser.email}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{webUser.email}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            {webUser.phone && (
+                              <div className="text-sm text-muted-foreground">
+                                {webUser.phone}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <RoleBadge role={webUser.role} />
+                        </TableCell>
+                        <TableCell>
+                          {webUser.assignedStationId ? (
+                            <div className="text-sm">
+                              <div className="font-medium">
+                                {availableStations.find(
+                                  (s) => s.id === webUser.assignedStationId
+                                )?.stationName || "Unknown Station"}
+                              </div>
+                              <div className="text-muted-foreground">
+                                {availableStations.find(
+                                  (s) => s.id === webUser.assignedStationId
+                                )?.stationCode || ""}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-muted-foreground">
+                              {webUser.role === "Backoffice"
+                                ? "All stations"
+                                : "None assigned"}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <StatusBadge status={webUser.status} />
+                            <div className="text-xs text-muted-foreground">
+                              Updated{" "}
+                              {new Date(
+                                webUser.updatedAt || webUser.createdAt || ""
+                              ).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewUser(webUser)}
+                            >
+                              View
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditUser(webUser)}
+                            >
+                              Edit
+                            </Button>
+                            {webUser.status === "Active" ? (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() =>
+                                  handleStatusAction(webUser, "disable")
+                                }
+                              >
+                                Disable
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="success"
+                                size="sm"
+                                onClick={() =>
+                                  handleStatusAction(webUser, "enable")
+                                }
+                              >
+                                Enable
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TooltipProvider>
           </div>
 
-          {filteredUsers.length === 0 && (
+          {!usersLoading && filteredUsers.length === 0 && (
             <div className="text-center py-12">
               <User className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
               <div className="text-lg font-medium mb-2">No users found</div>
@@ -557,7 +623,7 @@ export default function Users() {
         </CardContent>
 
         {/* Pagination */}
-        {filteredUsers.length > 0 && (
+        {!usersLoading && filteredUsers.length > 0 && (
           <div className="px-6 pb-6">
             <DataPagination
               currentPage={pagination.currentPage}
