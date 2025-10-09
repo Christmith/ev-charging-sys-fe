@@ -55,6 +55,24 @@ export const stationApi = {
     return response.data;
   },
 
+  // Get all stations
+  getAllStations: async () => {
+    const response = await api.get("/stations/all");
+    return response.data;
+  },
+
+  // Get unassigned operators
+  getUnassignedOperators: async () => {
+    const response = await api.get("/Stations/unassigned-operators");
+    return response.data;
+  },
+
+  // Get all operational users
+  getOperationalUsers: async () => {
+    const response = await api.get("/Admin/operational-users");
+    return response.data;
+  },
+
   // Create a new charging station
   createStation: async (stationData: {
     stationName: string;
@@ -72,6 +90,44 @@ export const stationApi = {
     status: "Active" | "Inactive";
   }) => {
     const response = await api.post("/stations", stationData);
+    return response.data;
+  },
+
+  // Update an existing charging station
+  updateStation: async (
+    stationId: string,
+    stationData: {
+      stationName: string;
+      stationCode?: string;
+      acChargingSlots: number;
+      dcChargingSlots: number;
+      stationOperatorIds?: string[];
+      addressLine1: string;
+      addressLine2?: string;
+      city: string;
+      latitude: string;
+      longitude: string;
+      googlePlaceID?: string;
+      additionalNotes?: string;
+      status: "Active" | "Inactive";
+    }
+  ) => {
+    const response = await api.patch(`/Stations/${stationId}`, stationData);
+    return response.data;
+  },
+
+  // Update station status (activate/deactivate)
+  updateStationStatus: async (
+    stationId: string,
+    status: "Active" | "Inactive"
+  ) => {
+    const response = await api.patch(`/Stations/${stationId}`, { status });
+    return response.data;
+  },
+
+  // Delete a charging station
+  deleteStation: async (stationId: string) => {
+    const response = await api.delete(`/stations/${stationId}`);
     return response.data;
   },
 };

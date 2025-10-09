@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Station } from "@/types/entities";
+import { Station, StationApiResponse } from "@/types/entities";
 import CreateStationModal from "@/components/stations/CreateStationModal";
 import ViewStationModal from "@/components/stations/ViewStationModal";
 import EditStationModal from "@/components/stations/EditStationModal";
@@ -38,77 +38,32 @@ import StationScheduleModal from "@/components/stations/StationScheduleModal";
 import { ConfirmationDialog } from "@/components/bookings/ConfirmationDialog";
 import { usePagination } from "@/hooks/usePagination";
 import { DataPagination } from "@/components/ui/data-pagination";
+import { stationApi } from "@/services/api";
 
-// Mock data - replace with API calls
-const mockStations: Station[] = [
-  {
-    id: "station-1",
-    name: "Central Station",
-    code: "CS-001",
-    acSlots: 2,
-    dcSlots: 2,
-    addressLine1: "123 Central Avenue",
-    city: "Colombo",
-    latitude: 6.9271,
-    longitude: 79.8612,
-    status: "ACTIVE",
-    operatorUserId: "user-2",
-    createdAt: "2024-01-10T09:00:00Z",
-    updatedAt: "2024-01-10T09:00:00Z",
-  },
-  {
-    id: "station-2",
-    name: "Mall Parking",
-    code: "MP-002",
-    acSlots: 3,
-    dcSlots: 0,
-    addressLine1: "456 Shopping Complex",
-    city: "Kandy",
-    latitude: 7.2906,
-    longitude: 80.6337,
-    status: "ACTIVE",
-    operatorUserId: "user-2",
-    createdAt: "2024-02-15T14:30:00Z",
-    updatedAt: "2024-11-01T10:15:00Z",
-  },
-  {
-    id: "station-3",
-    name: "Airport Terminal",
-    code: "AT-003",
-    acSlots: 0,
-    dcSlots: 6,
-    addressLine1: "Bandaranaike International Airport",
-    city: "Colombo",
-    latitude: 7.1808,
-    longitude: 79.8841,
-    status: "ACTIVE",
-    createdAt: "2024-03-20T11:45:00Z",
-    updatedAt: "2024-03-20T11:45:00Z",
-  },
-  {
-    id: "station-4",
-    name: "Beach Resort",
-    code: "BR-004",
-    acSlots: 2,
-    dcSlots: 0,
-    addressLine1: "789 Ocean Drive",
-    city: "Galle",
-    latitude: 6.0535,
-    longitude: 80.221,
-    status: "DEACTIVATED",
-    operatorUserId: "user-2",
-    createdAt: "2024-04-05T16:20:00Z",
-    updatedAt: "2024-10-15T13:45:00Z",
-  },
-];
-
-// Mock current availability data
-const mockAvailability = [
-  { stationId: "station-1", availableSlots: 3, totalSlots: 4 },
-  { stationId: "station-2", availableSlots: 2, totalSlots: 3 },
-  { stationId: "station-3", availableSlots: 0, totalSlots: 6 },
-  { stationId: "station-4", availableSlots: 0, totalSlots: 2 }, // Deactivated
-];
+// Helper function to transform API response to Station type
+const transformApiResponseToStation = (
+  apiStation: StationApiResponse
+): Station => {
+  return {
+    id: apiStation.id,
+    name: apiStation.stationName,
+    code: apiStation.stationCode,
+    acSlots: apiStation.acChargingSlots,
+    dcSlots: apiStation.dcChargingSlots,
+    addressLine1: apiStation.addressLine1,
+    city: apiStation.city,
+    latitude: parseFloat(apiStation.latitude),
+    longitude: parseFloat(apiStation.longitude),
+    status: apiStation.status === "Active" ? "ACTIVE" : "DEACTIVATED",
+    operatorUserId:
+      apiStation.assignedOperators.length > 0
+        ? apiStation.assignedOperators[0].id
+        : undefined,
+    operatorIds: apiStation.assignedOperators.map((op) => op.id),
+    createdAt: new Date().toISOString(), // API doesn't provide this, using current date
+    updatedAt: new Date().toISOString(), // API doesn't provide this, using current date
+  };
+};
 
 function StatusBadge({ status }: { status: Station["status"] }) {
   return (
@@ -173,8 +128,10 @@ export default function Stations() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [stations, setStations] = useState<Station[]>(mockStations);
+  const [stations, setStations] = useState<Station[]>([]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -191,6 +148,35 @@ export default function Stations() {
   );
 
   const { toast } = useToast();
+
+  // Fetch stations from API
+  useEffect(() => {
+    const fetchStations = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const apiStations = await stationApi.getAllStations();
+        const transformedStations = apiStations.map(
+          transformApiResponseToStation
+        );
+        setStations(transformedStations);
+      } catch (err) {
+        console.error("Failed to fetch stations:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to load stations"
+        );
+        toast({
+          title: "Error",
+          description: "Failed to load stations",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStations();
+  }, [toast]);
 
   const filteredStations = stations.filter((station) => {
     const matchesSearch =
@@ -217,7 +203,7 @@ export default function Stations() {
   // Reset to first page when filters change
   useEffect(() => {
     pagination.resetToFirstPage();
-  }, [searchTerm, statusFilter, typeFilter]);
+  }, [searchTerm, statusFilter, typeFilter, pagination]);
 
   const activeStations = stations.filter((s) => s.status === "ACTIVE").length;
   const deactivatedStations = stations.filter(
@@ -230,17 +216,40 @@ export default function Stations() {
   );
 
   const getAvailability = (stationId: string) => {
-    return (
-      mockAvailability.find((a) => a.stationId === stationId) || {
-        availableSlots: 0,
-        totalSlots: 0,
-      }
-    );
+    // TODO: Replace with real availability API call
+    // For now, using mock availability based on station slots
+    const station = stations.find((s) => s.id === stationId);
+    if (!station) {
+      return { availableSlots: 0, totalSlots: 0 };
+    }
+
+    const totalSlots = station.acSlots + station.dcSlots;
+    // Mock available slots - in real implementation, this would come from an API
+    const availableSlots =
+      station.status === "ACTIVE"
+        ? Math.floor(totalSlots * 0.6) // Assume 60% availability for active stations
+        : 0;
+
+    return {
+      availableSlots,
+      totalSlots,
+    };
   };
 
   // Handler functions
-  const handleCreateStation = (station: Station) => {
-    setStations([...stations, station]);
+  const handleCreateStation = async (station: Station) => {
+    // Refresh stations list from API after creation
+    try {
+      const apiStations = await stationApi.getAllStations();
+      const transformedStations = apiStations.map(
+        transformApiResponseToStation
+      );
+      setStations(transformedStations);
+    } catch (err) {
+      console.error("Failed to refresh stations:", err);
+      // Fallback to adding locally if API fails
+      setStations([...stations, station]);
+    }
   };
 
   const handleUpdateStation = (updatedStation: Station) => {
@@ -249,41 +258,75 @@ export default function Stations() {
     );
   };
 
-  const handleStatusChange = (stationId: string) => {
+  const handleStatusChange = async (stationId: string) => {
     const station = stations.find((s) => s.id === stationId);
     if (station) {
-      const newStatus: "ACTIVE" | "DEACTIVATED" =
-        station.status === "ACTIVE" ? "DEACTIVATED" : "ACTIVE";
-      const updatedStation = {
-        ...station,
-        status: newStatus,
-        updatedAt: new Date().toISOString(),
-      };
-      setStations(
-        stations.map((s) => (s.id === stationId ? updatedStation : s))
-      );
+      try {
+        const newStatus: "ACTIVE" | "DEACTIVATED" =
+          station.status === "ACTIVE" ? "DEACTIVATED" : "ACTIVE";
+        const apiStatus = newStatus === "ACTIVE" ? "Active" : "Inactive";
 
-      toast({
-        title: `Station ${
-          newStatus === "ACTIVE" ? "Activated" : "Deactivated"
-        }`,
-        description: `${station.name} has been ${newStatus.toLowerCase()}.`,
-      });
+        // Call the API to update station status
+        await stationApi.updateStationStatus(stationId, apiStatus);
+
+        // Update local state
+        const updatedStation = {
+          ...station,
+          status: newStatus,
+          updatedAt: new Date().toISOString(),
+        };
+        setStations(
+          stations.map((s) => (s.id === stationId ? updatedStation : s))
+        );
+
+        toast({
+          title: `Station ${
+            newStatus === "ACTIVE" ? "Activated" : "Deactivated"
+          }`,
+          description: `${station.name} has been ${newStatus.toLowerCase()}.`,
+        });
+      } catch (error) {
+        console.error("Failed to update station status:", error);
+        toast({
+          title: "Error",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Failed to update station status",
+          variant: "destructive",
+        });
+      }
     }
     setStatusDialogOpen(false);
     setSelectedStation(null);
   };
 
-  const handleDeleteStation = (stationId: string) => {
+  const handleDeleteStation = async (stationId: string) => {
     const station = stations.find((s) => s.id === stationId);
-    setStations(stations.filter((s) => s.id !== stationId));
 
-    toast({
-      title: "Station Deleted",
-      description: `${
-        station?.name || "Station"
-      } has been permanently removed.`,
-    });
+    try {
+      // Call the API to delete the station
+      await stationApi.deleteStation(stationId);
+
+      // Update local state
+      setStations(stations.filter((s) => s.id !== stationId));
+
+      toast({
+        title: "Station Deleted",
+        description: `${
+          station?.name || "Station"
+        } has been permanently removed.`,
+      });
+    } catch (error) {
+      console.error("Failed to delete station:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to delete station",
+        variant: "destructive",
+      });
+    }
+
     setDeleteDialogOpen(false);
     setSelectedStation(null);
   };
@@ -490,144 +533,175 @@ export default function Stations() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pagination.currentItems.map((station) => {
-                  const availability = getAvailability(station.id);
-                  const totalSlots = station.acSlots + station.dcSlots;
-                  const utilizationPercent =
-                    totalSlots > 0
-                      ? Math.round(
-                          ((totalSlots - availability.availableSlots) /
-                            totalSlots) *
-                            100
-                        )
-                      : 0;
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-32">
+                      <div className="flex items-center justify-center">
+                        <div className="text-muted-foreground">
+                          Loading stations...
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : error ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-32">
+                      <div className="flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="text-destructive mb-2">
+                            Failed to load stations
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.location.reload()}
+                          >
+                            Retry
+                          </Button>
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  pagination.currentItems.map((station) => {
+                    const availability = getAvailability(station.id);
+                    const totalSlots = station.acSlots + station.dcSlots;
+                    const utilizationPercent =
+                      totalSlots > 0
+                        ? Math.round(
+                            ((totalSlots - availability.availableSlots) /
+                              totalSlots) *
+                              100
+                          )
+                        : 0;
 
-                  return (
-                    <TableRow key={station.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{station.name}</div>
-                          {station.code && (
-                            <div className="text-sm text-muted-foreground font-mono">
-                              {station.code}
-                            </div>
-                          )}
-                          <div className="text-xs text-muted-foreground">
-                            Added{" "}
-                            {new Date(station.createdAt).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-2">
-                          <TypeBadge station={station} />
-                          <div className="text-sm">
-                            <div className="font-medium">
-                              {totalSlots} slots
-                            </div>
-                            <div className="text-muted-foreground">
-                              {station.acSlots > 0 && `${station.acSlots} AC`}
-                              {station.acSlots > 0 &&
-                                station.dcSlots > 0 &&
-                                " + "}
-                              {station.dcSlots > 0 && `${station.dcSlots} DC`}
+                    return (
+                      <TableRow key={station.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{station.name}</div>
+                            {station.code && (
+                              <div className="text-sm text-muted-foreground font-mono">
+                                {station.code}
+                              </div>
+                            )}
+                            <div className="text-xs text-muted-foreground">
+                              Added{" "}
+                              {new Date(station.createdAt).toLocaleDateString()}
                             </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-start gap-2">
-                          <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
-                          <div className="text-sm">
-                            <div>{station.addressLine1}</div>
-                            <div className="text-muted-foreground">
-                              {station.city}
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <TypeBadge station={station} />
+                            <div className="text-sm">
+                              <div className="font-medium">
+                                {totalSlots} slots
+                              </div>
+                              <div className="text-muted-foreground">
+                                {station.acSlots > 0 && `${station.acSlots} AC`}
+                                {station.acSlots > 0 &&
+                                  station.dcSlots > 0 &&
+                                  " + "}
+                                {station.dcSlots > 0 && `${station.dcSlots} DC`}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-start gap-2">
+                            <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
+                            <div className="text-sm">
+                              <div>{station.addressLine1}</div>
+                              <div className="text-muted-foreground">
+                                {station.city}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {station.latitude.toFixed(4)},{" "}
+                                {station.longitude.toFixed(4)}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-medium">
+                                {availability.availableSlots}/{totalSlots}
+                              </div>
+                              <div
+                                className={`w-2 h-2 rounded-full ${
+                                  availability.availableSlots > 0
+                                    ? "bg-success"
+                                    : "bg-warning"
+                                }`}
+                              />
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {station.latitude.toFixed(4)},{" "}
-                              {station.longitude.toFixed(4)}
+                              {utilizationPercent}% utilized
                             </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={station.status} />
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="text-sm font-medium">
-                              {availability.availableSlots}/{totalSlots}
-                            </div>
-                            <div
-                              className={`w-2 h-2 rounded-full ${
-                                availability.availableSlots > 0
-                                  ? "bg-success"
-                                  : "bg-warning"
-                              }`}
-                            />
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {utilizationPercent}% utilized
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={station.status} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openViewModal(station)}
-                          >
-                            View
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openScheduleModal(station)}
-                          >
-                            <Settings className="w-3 h-3 mr-1" />
-                            Schedule
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditModal(station)}
-                          >
-                            Edit
-                          </Button>
-                          {station.status === "ACTIVE" ? (
                             <Button
-                              variant="destructive"
+                              variant="outline"
                               size="sm"
-                              onClick={() =>
-                                openStatusDialog(station, "deactivate")
-                              }
+                              onClick={() => openViewModal(station)}
                             >
-                              Deactivate
+                              View
                             </Button>
-                          ) : (
                             <Button
-                              variant="default"
+                              variant="outline"
                               size="sm"
-                              className="bg-success hover:bg-success/90 text-success-foreground"
-                              onClick={() =>
-                                openStatusDialog(station, "activate")
-                              }
+                              onClick={() => openScheduleModal(station)}
                             >
-                              Activate
+                              <Settings className="w-3 h-3 mr-1" />
+                              Schedule
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEditModal(station)}
+                            >
+                              Edit
+                            </Button>
+                            {station.status === "ACTIVE" ? (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() =>
+                                  openStatusDialog(station, "deactivate")
+                                }
+                              >
+                                Deactivate
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="bg-success hover:bg-success/90 text-success-foreground"
+                                onClick={() =>
+                                  openStatusDialog(station, "activate")
+                                }
+                              >
+                                Activate
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </div>
 
-          {filteredStations.length === 0 && (
+          {filteredStations.length === 0 && !isLoading && !error && (
             <div className="text-center py-12">
               <MapPin className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
               <div className="text-lg font-medium mb-2">No stations found</div>
@@ -647,7 +721,7 @@ export default function Stations() {
         </CardContent>
 
         {/* Pagination */}
-        {filteredStations.length > 0 && (
+        {filteredStations.length > 0 && !isLoading && !error && (
           <div className="px-6 pb-6">
             <DataPagination
               currentPage={pagination.currentPage}

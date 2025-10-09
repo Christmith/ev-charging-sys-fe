@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { MapPin, Zap, QrCode, Settings, Plus } from "lucide-react";
+import { MapPin, Zap, QrCode, Settings, Plus, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,12 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { Station } from "@/types/entities";
 import { stationApi } from "@/services/api";
@@ -54,7 +60,7 @@ const stationSchema = z
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
     googlePlaceId: z.string().optional(),
-    operatorUserId: z.string().optional(),
+    operatorIds: z.array(z.string()).optional().default([]),
     notes: z.string().optional(),
   })
   .refine((data) => data.acSlots + data.dcSlots >= 1, {
@@ -70,12 +76,12 @@ interface CreateStationModalProps {
   onStationCreated: (station: Station) => void;
 }
 
-// Mock operator users
-const mockOperators = [
-  { id: "user-1", name: "John Smith", email: "john@station-ops.com" },
-  { id: "user-2", name: "Sarah Johnson", email: "sarah@station-ops.com" },
-  { id: "user-3", name: "Mike Chen", email: "mike@station-ops.com" },
-];
+// Operator type for API response
+interface Operator {
+  id: string;
+  email: string;
+  fullName: string;
+}
 
 export default function CreateStationModal({
   open,
@@ -85,6 +91,8 @@ export default function CreateStationModal({
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [generatingQR, setGeneratingQR] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [operatorsLoading, setOperatorsLoading] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<StationFormData>({
@@ -100,7 +108,7 @@ export default function CreateStationModal({
       latitude: 6.9271, // Default to Colombo
       longitude: 79.8612,
       googlePlaceId: "",
-      operatorUserId: "",
+      operatorIds: [],
       notes: "",
     },
   });
@@ -108,6 +116,30 @@ export default function CreateStationModal({
   const acSlots = form.watch("acSlots");
   const dcSlots = form.watch("dcSlots");
   const totalSlots = acSlots + dcSlots;
+
+  // Fetch unassigned operators
+  useEffect(() => {
+    const fetchOperators = async () => {
+      if (!open) return; // Only fetch when modal is open
+
+      try {
+        setOperatorsLoading(true);
+        const operatorsData = await stationApi.getUnassignedOperators();
+        setOperators(operatorsData);
+      } catch (error) {
+        console.error("Failed to fetch operators:", error);
+        toast({
+          title: "Warning",
+          description: "Failed to load available operators",
+          variant: "destructive",
+        });
+      } finally {
+        setOperatorsLoading(false);
+      }
+    };
+
+    fetchOperators();
+  }, [open, toast]);
 
   const onSubmit = async (data: StationFormData) => {
     try {
@@ -122,7 +154,7 @@ export default function CreateStationModal({
         stationCode: stationCode,
         acChargingSlots: data.acSlots,
         dcChargingSlots: data.dcSlots,
-        stationOperatorIds: data.operatorUserId ? [data.operatorUserId] : [],
+        stationOperatorIds: data.operatorIds || [],
         addressLine1: data.addressLine1,
         addressLine2: data.addressLine2 || undefined,
         city: data.city,
@@ -148,7 +180,10 @@ export default function CreateStationModal({
         latitude: data.latitude,
         longitude: data.longitude,
         googlePlaceId: data.googlePlaceId,
-        operatorUserId: data.operatorUserId,
+        operatorUserId:
+          data.operatorIds && data.operatorIds.length > 0
+            ? data.operatorIds[0]
+            : undefined,
         status: "ACTIVE",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -330,30 +365,108 @@ export default function CreateStationModal({
 
                     <FormField
                       control={form.control}
-                      name="operatorUserId"
+                      name="operatorIds"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Station Operator</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Assign operator (optional)" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {mockOperators.map((operator) => (
-                                <SelectItem
-                                  key={operator.id}
-                                  value={operator.id}
+                          <FormLabel>Station Operators</FormLabel>
+                          <FormDescription>
+                            Select one or more operators to assign to this
+                            station
+                          </FormDescription>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className="w-full justify-between font-normal"
+                                  disabled={operatorsLoading}
                                 >
-                                  {operator.name} - {operator.email}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                                  {operatorsLoading ? (
+                                    "Loading operators..."
+                                  ) : field.value && field.value.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {field.value.map((operatorId) => {
+                                        const operator = operators.find(
+                                          (op) => op.id === operatorId
+                                        );
+                                        return operator ? (
+                                          <Badge
+                                            key={operatorId}
+                                            variant="secondary"
+                                            className="text-xs"
+                                          >
+                                            {operator.fullName}
+                                            <button
+                                              type="button"
+                                              className="ml-1 hover:bg-secondary-foreground/20 rounded-full p-0.5"
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                const newValue =
+                                                  field.value?.filter(
+                                                    (id) => id !== operatorId
+                                                  ) || [];
+                                                field.onChange(newValue);
+                                              }}
+                                            >
+                                              <X className="h-3 w-3" />
+                                            </button>
+                                          </Badge>
+                                        ) : null;
+                                      })}
+                                    </div>
+                                  ) : (
+                                    "Select operators (optional)"
+                                  )}
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-full p-0">
+                              <div className="max-h-60 overflow-auto p-1">
+                                {operators.length === 0 ? (
+                                  <div className="p-4 text-center text-sm text-muted-foreground">
+                                    {operatorsLoading
+                                      ? "Loading..."
+                                      : "No unassigned operators available"}
+                                  </div>
+                                ) : (
+                                  operators.map((operator) => (
+                                    <div
+                                      key={operator.id}
+                                      className="flex items-center space-x-2 p-2 hover:bg-accent rounded-sm cursor-pointer"
+                                      onClick={() => {
+                                        const currentValue = field.value || [];
+                                        const isSelected =
+                                          currentValue.includes(operator.id);
+                                        const newValue = isSelected
+                                          ? currentValue.filter(
+                                              (id) => id !== operator.id
+                                            )
+                                          : [...currentValue, operator.id];
+                                        field.onChange(newValue);
+                                      }}
+                                    >
+                                      <Checkbox
+                                        checked={
+                                          field.value?.includes(operator.id) ||
+                                          false
+                                        }
+                                        onChange={() => {}} // Handled by the parent div click
+                                      />
+                                      <div className="flex-1">
+                                        <div className="font-medium text-sm">
+                                          {operator.fullName}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {operator.email}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                           <FormMessage />
                         </FormItem>
                       )}

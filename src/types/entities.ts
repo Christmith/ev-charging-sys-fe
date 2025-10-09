@@ -10,7 +10,7 @@ export interface EVOwner {
   city: string;
   vehicleModel?: string;
   vehiclePlate?: string;
-  status: 'ACTIVE' | 'DEACTIVATED';
+  status: "ACTIVE" | "DEACTIVATED";
   createdAt: string;
   updatedAt: string;
 }
@@ -27,10 +27,39 @@ export interface Station {
   latitude: number;
   longitude: number;
   googlePlaceId?: string;
-  status: 'ACTIVE' | 'DEACTIVATED';
-  operatorUserId?: string;
+  status: "ACTIVE" | "DEACTIVATED";
+  operatorUserId?: string; // For backward compatibility
+  operatorIds?: string[]; // Array of assigned operator IDs
   createdAt: string;
   updatedAt: string;
+}
+
+// API response structure for stations
+export interface StationApiResponse {
+  id: string;
+  stationName: string;
+  stationCode: string;
+  acChargingSlots: number;
+  dcChargingSlots: number;
+  acSlots: string[];
+  dcSlots: string[];
+  acPowerOutput: string | null;
+  acConnector: string;
+  acChargingTime: string | null;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  latitude: string;
+  longitude: string;
+  totalCapacity: number;
+  status: "Active" | "Inactive";
+  additionalNotes: string;
+  assignedOperators: Array<{
+    id: string;
+    fullName: string;
+    email: string;
+  }>;
+  upcomingBookings: unknown[];
 }
 
 // Station Schedule (weekly template)
@@ -39,7 +68,7 @@ export interface StationSchedule {
   weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Sunday
   windows: Array<{
     start: string; // HH:mm format
-    end: string;   // HH:mm format
+    end: string; // HH:mm format
     availableSlots: number;
   }>;
 }
@@ -64,12 +93,12 @@ export interface Booking {
   stationId: string; // FK to Station.id
   stationName?: string; // Denormalized for display
   chargingSlot?: {
-    type: 'AC' | 'DC';
+    type: "AC" | "DC";
     slotNumber: number;
   };
-  status: 'PENDING' | 'APPROVED' | 'CANCELLED' | 'COMPLETED';
+  status: "PENDING" | "APPROVED" | "CANCELLED" | "COMPLETED";
   startAt: string; // ISO datetime
-  endAt: string;   // ISO datetime
+  endAt: string; // ISO datetime
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;
@@ -92,13 +121,13 @@ export interface DashboardStats {
 // Audit Log entry
 export interface AuditLogEntry {
   id: string;
-  entityType: 'Booking' | 'EVOwner' | 'Station' | 'WebUser';
+  entityType: "Booking" | "EVOwner" | "Station" | "WebUser";
   entityId: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'ACTIVATE' | 'DEACTIVATE';
+  action: "CREATE" | "UPDATE" | "DELETE" | "ACTIVATE" | "DEACTIVATE";
   actorId: string;
   actorName: string;
   timestamp: string;
-  changes?: Record<string, any>;
+  changes?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
 }
@@ -112,21 +141,21 @@ export interface PaginationParams {
 export interface BookingFilters {
   dateFrom?: string;
   dateTo?: string;
-  status?: Booking['status'];
+  status?: Booking["status"];
   stationId?: string;
   ownerNIC?: string;
-  type?: 'AC' | 'DC';
+  type?: "AC" | "DC";
 }
 
 export interface OwnerFilters {
-  status?: EVOwner['status'];
+  status?: EVOwner["status"];
   city?: string;
   search?: string;
 }
 
 export interface StationFilters {
-  status?: Station['status'];
-  type?: 'AC' | 'DC';
+  status?: Station["status"];
+  type?: "AC" | "DC";
   city?: string;
   operatorUserId?: string;
 }
