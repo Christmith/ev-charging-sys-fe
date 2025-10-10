@@ -1,9 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { CalendarIcon, Clock, MapPin, User, Search, Plus, Eye } from "lucide-react";
+import {
+  CalendarIcon,
+  Clock,
+  MapPin,
+  User,
+  Search,
+  Plus,
+  Eye,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,9 +44,11 @@ import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Booking, EVOwner } from "@/types/entities";
+import { Booking, EVOwner, EvOwnerDetailsApiResponse } from "@/types/entities";
 import { ViewUserModal } from "./ViewUserModal";
+import { CreateOwnerModal } from "../owners/CreateOwnerModal";
 import { useToast } from "@/hooks/use-toast";
+import { evOwnerApi } from "@/services/api";
 
 const formSchema = z.object({
   ownerNIC: z.string().min(1, "NIC is required"),
@@ -57,7 +67,9 @@ const formSchema = z.object({
 interface CreateBookingModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreateBooking: (booking: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onCreateBooking: (
+    booking: Omit<Booking, "id" | "createdAt" | "updatedAt">
+  ) => void;
 }
 
 // Mock data for EV owners
@@ -73,7 +85,7 @@ const mockEVOwners: EVOwner[] = [
     city: "Colombo",
     vehicleModel: "Tesla Model 3",
     vehiclePlate: "CAR-1234",
-    status: "ACTIVE",
+    status: "Active",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -87,7 +99,7 @@ const mockEVOwners: EVOwner[] = [
     city: "Kandy",
     vehicleModel: "Nissan Leaf",
     vehiclePlate: "CAR-5678",
-    status: "ACTIVE",
+    status: "Active",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -101,7 +113,7 @@ const mockEVOwners: EVOwner[] = [
     city: "Galle",
     vehicleModel: "BMW i3",
     vehiclePlate: "CAR-9012",
-    status: "ACTIVE",
+    status: "Active",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -113,14 +125,14 @@ const mockEVOwners: EVOwner[] = [
     email: "alice.johnson@email.com",
     addressLine1: "321 Cedar Lane",
     city: "Negombo",
-    status: "ACTIVE",
+    status: "Active",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
 ];
 
 // Create a global mock EV owners array for this session
-let globalMockEVOwners = [...mockEVOwners];
+const globalMockEVOwners = [...mockEVOwners];
 
 const mockStations = [
   { id: "station-1", name: "Central Station", acSlots: 4, dcSlots: 2 },
@@ -130,25 +142,35 @@ const mockStations = [
 ];
 
 // Function to get next available slot
-const getNextAvailableSlot = (stationId: string, slotType: 'AC' | 'DC'): number => {
-  const station = mockStations.find(s => s.id === stationId);
+const getNextAvailableSlot = (
+  stationId: string,
+  slotType: "AC" | "DC"
+): number => {
+  const station = mockStations.find((s) => s.id === stationId);
   if (!station) return 1;
-  
-  const totalSlots = slotType === 'AC' ? station.acSlots : station.dcSlots;
+
+  const totalSlots = slotType === "AC" ? station.acSlots : station.dcSlots;
   // For demo purposes, return a random available slot
   return Math.floor(Math.random() * totalSlots) + 1;
 };
 
 const timeSlots = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2);
-  const minute = i % 2 === 0 ? '00' : '30';
-  return `${hour.toString().padStart(2, '0')}:${minute}`;
+  const minute = i % 2 === 0 ? "00" : "30";
+  return `${hour.toString().padStart(2, "0")}:${minute}`;
 });
 
-export function CreateBookingModal({ open, onOpenChange, onCreateBooking }: CreateBookingModalProps) {
+export function CreateBookingModal({
+  open,
+  onOpenChange,
+  onCreateBooking,
+}: CreateBookingModalProps) {
   const [foundUser, setFoundUser] = useState<EVOwner | null>(null);
   const [userNotFound, setUserNotFound] = useState(false);
   const [showViewUserModal, setShowViewUserModal] = useState(false);
+  const [showCreateOwnerModal, setShowCreateOwnerModal] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [apiOwnerDetails, setApiOwnerDetails] = useState<EvOwnerDetailsApiResponse | null>(null);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -158,10 +180,21 @@ export function CreateBookingModal({ open, onOpenChange, onCreateBooking }: Crea
   const watchedNIC = form.watch("ownerNIC");
   const watchedFirstName = form.watch("firstName");
   const watchedLastName = form.watch("lastName");
-  const selectedStation = mockStations.find(station => station.id === form.watch("stationId"));
+
+  // Clear user state when NIC changes
+  useEffect(() => {
+    if (watchedNIC && foundUser && foundUser.nic !== watchedNIC) {
+      setFoundUser(null);
+      setApiOwnerDetails(null);
+      setUserNotFound(false);
+    }
+  }, [watchedNIC, foundUser]);
+  const selectedStation = mockStations.find(
+    (station) => station.id === form.watch("stationId")
+  );
   const selectedSlotType = form.watch("slotType");
 
-  const handleFindUser = () => {
+  const handleFindUser = async () => {
     if (!watchedNIC) {
       toast({
         title: "Error",
@@ -171,26 +204,58 @@ export function CreateBookingModal({ open, onOpenChange, onCreateBooking }: Crea
       return;
     }
 
-    const user = globalMockEVOwners.find(owner => owner.nic === watchedNIC);
-    if (user) {
-      setFoundUser(user);
+    try {
+      setIsSearching(true);
+      const ownerDetails = await evOwnerApi.getEvOwnerByNIC(watchedNIC);
+      
+      // Split fullName into firstName and lastName
+      const nameParts = ownerDetails.fullName.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      // Transform API response to EVOwner format for internal use
+      const transformedUser: EVOwner = {
+        nic: ownerDetails.nic,
+        firstName,
+        lastName,
+        phone: ownerDetails.phone,
+        email: ownerDetails.email,
+        addressLine1: ownerDetails.address,
+        addressLine2: undefined,
+        city: '', // Will be extracted from address if needed
+        vehicleModel: ownerDetails.vehicleModel,
+        vehiclePlate: ownerDetails.licensePlate,
+        status: ownerDetails.status,
+        createdAt: ownerDetails.createdAt,
+        updatedAt: ownerDetails.updatedAt,
+      };
+
+      setFoundUser(transformedUser);
+      setApiOwnerDetails(ownerDetails);
       setUserNotFound(false);
-      form.setValue("firstName", user.firstName);
-      form.setValue("lastName", user.lastName);
+      form.setValue("firstName", firstName);
+      form.setValue("lastName", lastName);
+      
       toast({
         title: "User Found",
-        description: `Found ${user.firstName} ${user.lastName}`,
+        description: `Found ${firstName} ${lastName}`,
       });
-    } else {
+    } catch (error) {
+      console.error("Failed to find user:", error);
       setFoundUser(null);
+      setApiOwnerDetails(null);
       setUserNotFound(true);
       form.setValue("firstName", "");
       form.setValue("lastName", "");
+      
+      const errorMessage = error instanceof Error ? error.message : "No user found with this NIC.";
       toast({
         title: "User Not Found",
-        description: "No user found with this NIC. Please fill in the details to add a new user.",
+        description: errorMessage,
         variant: "destructive",
       });
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -212,7 +277,7 @@ export function CreateBookingModal({ open, onOpenChange, onCreateBooking }: Crea
       email: "temp@email.com", // Placeholder
       addressLine1: "Address not provided",
       city: "Not specified",
-      status: "ACTIVE",
+      status: "Active",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -220,16 +285,34 @@ export function CreateBookingModal({ open, onOpenChange, onCreateBooking }: Crea
     globalMockEVOwners.push(newUser);
     setFoundUser(newUser);
     setUserNotFound(false);
-    
+
     toast({
       title: "User Added",
       description: `Successfully added ${newUser.firstName} ${newUser.lastName}`,
     });
   };
 
+  const handleCreateOwner = (newOwner: EVOwner) => {
+    // Update form with the newly created owner
+    form.setValue("ownerNIC", newOwner.nic);
+    form.setValue("firstName", newOwner.firstName);
+    form.setValue("lastName", newOwner.lastName);
+    setFoundUser(newOwner);
+    setUserNotFound(false);
+    
+    toast({
+      title: "Success",
+      description: `EV Owner ${newOwner.firstName} ${newOwner.lastName} created successfully`,
+    });
+  };
+
   const onSubmit = (values: z.infer<typeof formSchema>) => {
-    const selectedOwner = foundUser || globalMockEVOwners.find(owner => owner.nic === values.ownerNIC);
-    const selectedStation = mockStations.find(station => station.id === values.stationId);
+    const selectedOwner =
+      foundUser ||
+      globalMockEVOwners.find((owner) => owner.nic === values.ownerNIC);
+    const selectedStation = mockStations.find(
+      (station) => station.id === values.stationId
+    );
 
     if (!selectedOwner) {
       toast({
@@ -241,17 +324,17 @@ export function CreateBookingModal({ open, onOpenChange, onCreateBooking }: Crea
     }
 
     const startDateTime = new Date(values.date);
-    const [startHour, startMinute] = values.startTime.split(':');
+    const [startHour, startMinute] = values.startTime.split(":");
     startDateTime.setHours(parseInt(startHour), parseInt(startMinute), 0, 0);
 
     const endDateTime = new Date(values.date);
-    const [endHour, endMinute] = values.endTime.split(':');
+    const [endHour, endMinute] = values.endTime.split(":");
     endDateTime.setHours(parseInt(endHour), parseInt(endMinute), 0, 0);
 
     // Automatically assign charging slot
     const slotNumber = getNextAvailableSlot(values.stationId, values.slotType);
 
-    const newBooking: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'> = {
+    const newBooking: Omit<Booking, "id" | "createdAt" | "updatedAt"> = {
       ownerNIC: values.ownerNIC,
       ownerName: `${selectedOwner.firstName} ${selectedOwner.lastName}`,
       stationId: values.stationId,
@@ -310,9 +393,10 @@ export function CreateBookingModal({ open, onOpenChange, onCreateBooking }: Crea
                           variant="outline"
                           onClick={handleFindUser}
                           className="px-3"
+                          disabled={isSearching}
                         >
                           <Search className="w-4 h-4" />
-                          Find User
+                          {isSearching ? "Searching..." : "Find User"}
                         </Button>
                       </div>
                       <FormMessage />
@@ -320,312 +404,365 @@ export function CreateBookingModal({ open, onOpenChange, onCreateBooking }: Crea
                   )}
                 />
 
-                {/* First Name Field */}
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Enter first name"
-                          {...field}
-                          disabled={!!foundUser}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* First Name and Last Name Fields - Hidden when user not found */}
+                {!userNotFound && (
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Enter first name"
+                              {...field}
+                              disabled={!!foundUser}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                {/* Last Name Field with Action Button */}
+                    <FormField
+                      control={form.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last Name</FormLabel>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <Input
+                                placeholder="Enter last name"
+                                {...field}
+                                disabled={!!foundUser}
+                              />
+                            </FormControl>
+                            {foundUser && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setShowViewUserModal(true)}
+                                className="px-3"
+                              >
+                                <Eye className="w-4 h-4" />
+                                View User
+                              </Button>
+                            )}
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </>
+                )}
+
+                {/* Create User Button - Full width when user not found */}
+                {userNotFound && (
+                  <div className="w-full">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowCreateOwnerModal(true)}
+                      className="w-full gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Create New EV Owner
+                    </Button>
+                  </div>
+                )}
+
+                {/* Station Selection */}
                 <FormField
                   control={form.control}
-                  name="lastName"
+                  name="stationId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Last Name</FormLabel>
-                      <div className="flex gap-2">
+                      <FormLabel className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        Charging Station
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
-                          <Input
-                            placeholder="Enter last name"
-                            {...field}
-                            disabled={!!foundUser}
-                          />
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select charging station" />
+                          </SelectTrigger>
                         </FormControl>
-                        {foundUser ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setShowViewUserModal(true)}
-                            className="px-3"
-                          >
-                            <Eye className="w-4 h-4" />
-                            View User
-                          </Button>
-                        ) : userNotFound && watchedFirstName && watchedLastName ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleAddUser}
-                            className="px-3"
-                          >
-                            <Plus className="w-4 h-4" />
-                            Add User
-                          </Button>
-                        ) : null}
-                      </div>
+                        <SelectContent>
+                          {mockStations.map((station) => (
+                            <SelectItem key={station.id} value={station.id}>
+                              <div className="flex flex-col items-start">
+                                <span className="font-medium">
+                                  {station.name}
+                                </span>
+                                <span className="text-sm text-muted-foreground">
+                                  AC Slots: {station.acSlots} | DC Slots:{" "}
+                                  {station.dcSlots}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-              {/* Station Selection */}
-              <FormField
-                control={form.control}
-                name="stationId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      Charging Station
-                    </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select charging station" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {mockStations.map((station) => (
-                          <SelectItem key={station.id} value={station.id}>
+                {/* Slot Type Selection */}
+                <FormField
+                  control={form.control}
+                  name="slotType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        Charging Slot Type
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select slot type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="AC">
                             <div className="flex flex-col items-start">
-                              <span className="font-medium">{station.name}</span>
+                              <span className="font-medium">AC Charging</span>
                               <span className="text-sm text-muted-foreground">
-                                AC Slots: {station.acSlots} | DC Slots: {station.dcSlots}
+                                Slower charging (Type 2)
                               </span>
                             </div>
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                          <SelectItem value="DC">
+                            <div className="flex flex-col items-start">
+                              <span className="font-medium">
+                                DC Fast Charging
+                              </span>
+                              <span className="text-sm text-muted-foreground">
+                                Rapid charging (CCS/CHAdeMO)
+                              </span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {selectedStation && selectedSlotType && (
+                        <div className="text-sm text-muted-foreground">
+                          Available slots:{" "}
+                          {selectedSlotType === "AC"
+                            ? selectedStation.acSlots
+                            : selectedStation.dcSlots}
+                        </div>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              {/* Slot Type Selection */}
-              <FormField
-                control={form.control}
-                name="slotType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      Charging Slot Type
-                    </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                {/* Date Selection */}
+                <FormField
+                  control={form.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="flex items-center gap-2">
+                        <CalendarIcon className="w-4 h-4" />
+                        Booking Date
+                      </FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) =>
+                              date < new Date() ||
+                              date >
+                                new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                            }
+                            initialFocus
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Time Selection */}
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="startTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start Time</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select start time" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="max-h-60">
+                            {timeSlots.map((time) => (
+                              <SelectItem key={time} value={time}>
+                                {time}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="endTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>End Time</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select end time" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="max-h-60">
+                            {timeSlots.map((time) => (
+                              <SelectItem key={time} value={time}>
+                                {time}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Notes */}
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes (Optional)</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select slot type" />
-                        </SelectTrigger>
+                        <Textarea
+                          placeholder="Add any special instructions or notes..."
+                          className="resize-none"
+                          {...field}
+                        />
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="AC">
-                          <div className="flex flex-col items-start">
-                            <span className="font-medium">AC Charging</span>
-                            <span className="text-sm text-muted-foreground">Slower charging (Type 2)</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="DC">
-                          <div className="flex flex-col items-start">
-                            <span className="font-medium">DC Fast Charging</span>
-                            <span className="text-sm text-muted-foreground">Rapid charging (CCS/CHAdeMO)</span>
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {selectedStation && selectedSlotType && (
-                      <div className="text-sm text-muted-foreground">
-                        Available slots: {selectedSlotType === 'AC' ? selectedStation.acSlots : selectedStation.dcSlots}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Booking Summary */}
+                {(foundUser || selectedStation || form.watch("date")) && (
+                  <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                    <h4 className="font-medium text-sm">Booking Summary</h4>
+                    {foundUser && (
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">Owner:</span>{" "}
+                        {foundUser.firstName} {foundUser.lastName} (
+                        {foundUser.nic})
                       </div>
                     )}
-                    <FormMessage />
-                  </FormItem>
+                    {selectedStation && (
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">Station:</span>{" "}
+                        {selectedStation.name} (AC: {selectedStation.acSlots},
+                        DC: {selectedStation.dcSlots})
+                      </div>
+                    )}
+                    {form.watch("date") && (
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">Date:</span>{" "}
+                        {format(form.watch("date"), "PPP")}
+                      </div>
+                    )}
+                    {form.watch("startTime") && form.watch("endTime") && (
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">Time:</span>{" "}
+                        {form.watch("startTime")} - {form.watch("endTime")}
+                      </div>
+                    )}
+                    {selectedSlotType && (
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">
+                          Slot Type:
+                        </span>{" "}
+                        {selectedSlotType} charging
+                      </div>
+                    )}
+                  </div>
                 )}
-              />
-
-              {/* Date Selection */}
-              <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4" />
-                      Booking Date
-                    </FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date < new Date() || date > new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-                          }
-                          initialFocus
-                          className={cn("p-3 pointer-events-auto")}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Time Selection */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="startTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start Time</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select start time" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="max-h-60">
-                          {timeSlots.map((time) => (
-                            <SelectItem key={time} value={time}>
-                              {time}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="endTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End Time</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select end time" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="max-h-60">
-                          {timeSlots.map((time) => (
-                            <SelectItem key={time} value={time}>
-                              {time}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
 
-              {/* Notes */}
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes (Optional)</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Add any special instructions or notes..."
-                        className="resize-none"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant="accent">
+                  Create Booking
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
-              {/* Booking Summary */}
-              {(foundUser || selectedStation || form.watch("date")) && (
-                <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-                  <h4 className="font-medium text-sm">Booking Summary</h4>
-                  {foundUser && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Owner:</span> {foundUser.firstName} {foundUser.lastName} ({foundUser.nic})
-                    </div>
-                  )}
-                  {selectedStation && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Station:</span> {selectedStation.name} (AC: {selectedStation.acSlots}, DC: {selectedStation.dcSlots})
-                    </div>
-                  )}
-                  {form.watch("date") && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Date:</span> {format(form.watch("date"), "PPP")}
-                    </div>
-                  )}
-                  {form.watch("startTime") && form.watch("endTime") && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Time:</span> {form.watch("startTime")} - {form.watch("endTime")}
-                    </div>
-                  )}
-                  {selectedSlotType && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Slot Type:</span> {selectedSlotType} charging
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+      <ViewUserModal
+        open={showViewUserModal}
+        onOpenChange={setShowViewUserModal}
+        user={foundUser}
+      />
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="accent">
-                Create Booking
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
-
-    <ViewUserModal
-      open={showViewUserModal}
-      onOpenChange={setShowViewUserModal}
-      user={foundUser}
-    />
-  </>
+      <CreateOwnerModal
+        open={showCreateOwnerModal}
+        onOpenChange={setShowCreateOwnerModal}
+        onOwnerCreated={handleCreateOwner}
+      />
+    </>
   );
 }

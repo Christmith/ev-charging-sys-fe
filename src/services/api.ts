@@ -208,6 +208,12 @@ export const evOwnerApi = {
     });
     return response.data;
   },
+
+  // Get EV owner details by NIC
+  getEvOwnerByNIC: async (nic: string) => {
+    const response = await api.get(`/evowners/details/${nic}`);
+    return response.data;
+  },
 };
 
 export default api;
