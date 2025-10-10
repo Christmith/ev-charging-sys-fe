@@ -1,5 +1,18 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, Filter, Calendar, MapPin, User, Clock, Eye, Edit, X, Check, Trash2 } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Filter,
+  Calendar,
+  MapPin,
+  User,
+  Clock,
+  Eye,
+  Edit,
+  X,
+  Check,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +58,7 @@ const mockBookings: Booking[] = [
   },
   {
     id: "2",
-    ownerNIC: "987654321V", 
+    ownerNIC: "987654321V",
     ownerName: "Jane Smith",
     stationId: "station-2",
     stationName: "Mall Parking",
@@ -59,7 +72,7 @@ const mockBookings: Booking[] = [
   {
     id: "3",
     ownerNIC: "456789123V",
-    ownerName: "Bob Wilson", 
+    ownerName: "Bob Wilson",
     stationId: "station-1",
     stationName: "Central Station",
     status: "COMPLETED",
@@ -73,7 +86,7 @@ const mockBookings: Booking[] = [
     id: "4",
     ownerNIC: "789123456V",
     ownerName: "Alice Johnson",
-    stationId: "station-3", 
+    stationId: "station-3",
     stationName: "Airport Terminal",
     status: "CANCELLED",
     startAt: "2024-12-14T13:00:00Z",
@@ -82,22 +95,19 @@ const mockBookings: Booking[] = [
     createdAt: "2024-12-13T09:00:00Z",
     updatedAt: "2024-12-13T16:00:00Z",
     cancelReason: "Customer requested cancellation",
-  }
+  },
 ];
 
-function StatusBadge({ status }: { status: Booking['status'] }) {
+function StatusBadge({ status }: { status: Booking["status"] }) {
   const variants = {
     PENDING: "bg-warning/10 text-warning border-warning/20",
-    APPROVED: "bg-success/10 text-success border-success/20", 
+    APPROVED: "bg-success/10 text-success border-success/20",
     CANCELLED: "bg-muted text-muted-foreground border-muted/20",
     COMPLETED: "bg-accent/10 text-accent border-accent/20",
   };
 
   return (
-    <Badge 
-      variant="outline" 
-      className={variants[status]}
-    >
+    <Badge variant="outline" className={variants[status]}>
       {status.toLowerCase()}
     </Badge>
   );
@@ -121,13 +131,14 @@ export default function Bookings() {
   const { toast } = useToast();
 
   const filteredBookings = bookings.filter((booking) => {
-    const matchesSearch = 
+    const matchesSearch =
       booking.ownerNIC.toLowerCase().includes(searchTerm.toLowerCase()) ||
       booking.ownerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       booking.stationName?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === "all" || booking.status === statusFilter;
-    
+
+    const matchesStatus =
+      statusFilter === "all" || booking.status === statusFilter;
+
     return matchesSearch && matchesStatus;
   });
 
@@ -145,7 +156,7 @@ export default function Bookings() {
     const date = new Date(dateString);
     return {
       date: date.toLocaleDateString(),
-      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
   };
 
@@ -157,18 +168,20 @@ export default function Bookings() {
   };
 
   const canDelete = (booking: Booking) => {
-    return booking.status === 'COMPLETED' || booking.status === 'CANCELLED';
+    return booking.status === "COMPLETED" || booking.status === "CANCELLED";
   };
 
-  const handleCreateBooking = (newBooking: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleCreateBooking = (
+    newBooking: Omit<Booking, "id" | "createdAt" | "updatedAt">
+  ) => {
     const booking: Booking = {
       ...newBooking,
       id: `booking-${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    
-    setBookings(prev => [booking, ...prev]);
+
+    setBookings((prev) => [booking, ...prev]);
     toast({
       title: "Booking Created",
       description: `Booking ${booking.id} has been created successfully.`,
@@ -176,8 +189,8 @@ export default function Bookings() {
   };
 
   const handleUpdateBooking = (updatedBooking: Booking) => {
-    setBookings(prev => 
-      prev.map(booking => 
+    setBookings((prev) =>
+      prev.map((booking) =>
         booking.id === updatedBooking.id ? updatedBooking : booking
       )
     );
@@ -201,30 +214,35 @@ export default function Bookings() {
     setConfirmDialog({
       open: true,
       title: "Delete Booking",
-      description: "Are you sure you want to delete this booking? This action cannot be undone.",
+      description:
+        "Are you sure you want to delete this booking? This action cannot be undone.",
       action: () => {
-        setBookings(prev => prev.filter(b => b.id !== booking.id));
+        setBookings((prev) => prev.filter((b) => b.id !== booking.id));
         toast({
           title: "Booking Deleted",
           description: `Booking ${booking.id} has been deleted successfully.`,
         });
         setConfirmDialog(null);
-      }
+      },
     });
   };
 
-  const handleQuickAction = (booking: Booking, action: 'approve' | 'cancel') => {
+  const handleQuickAction = (
+    booking: Booking,
+    action: "approve" | "cancel"
+  ) => {
     const actionDetails = {
       approve: {
         title: "Approve Booking",
         description: "Are you sure you want to approve this booking?",
-        newStatus: "APPROVED" as const
+        newStatus: "APPROVED" as const,
       },
       cancel: {
-        title: "Cancel Booking", 
-        description: "Are you sure you want to cancel this booking? This action cannot be undone.",
-        newStatus: "CANCELLED" as const
-      }
+        title: "Cancel Booking",
+        description:
+          "Are you sure you want to cancel this booking? This action cannot be undone.",
+        newStatus: "CANCELLED" as const,
+      },
     };
 
     const { title, description, newStatus } = actionDetails[action];
@@ -238,11 +256,11 @@ export default function Bookings() {
           ...booking,
           status: newStatus,
           updatedAt: new Date().toISOString(),
-          ...(action === 'cancel' && { cancelReason: 'Cancelled by admin' })
+          ...(action === "cancel" && { cancelReason: "Cancelled by admin" }),
         };
         handleUpdateBooking(updatedBooking);
         setConfirmDialog(null);
-      }
+      },
     });
   };
 
@@ -251,12 +269,18 @@ export default function Bookings() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Bookings Management</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Bookings Management
+          </h1>
           <p className="text-muted-foreground">
             Manage EV charging reservations and track booking status
           </p>
         </div>
-        <Button variant="accent" className="gap-2" onClick={() => setCreateModalOpen(true)}>
+        <Button
+          variant="accent"
+          className="gap-2"
+          onClick={() => setCreateModalOpen(true)}
+        >
           <Plus className="w-4 h-4" />
           Create Booking
         </Button>
@@ -266,7 +290,9 @@ export default function Bookings() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Bookings
+            </CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -280,7 +306,7 @@ export default function Bookings() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-warning">
-              {bookings.filter(b => b.status === 'PENDING').length}
+              {bookings.filter((b) => b.status === "PENDING").length}
             </div>
           </CardContent>
         </Card>
@@ -291,7 +317,7 @@ export default function Bookings() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-success">
-              {bookings.filter(b => b.status === 'APPROVED').length}
+              {bookings.filter((b) => b.status === "APPROVED").length}
             </div>
           </CardContent>
         </Card>
@@ -302,7 +328,7 @@ export default function Bookings() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-accent">
-              {bookings.filter(b => b.status === 'COMPLETED').length}
+              {bookings.filter((b) => b.status === "COMPLETED").length}
             </div>
           </CardContent>
         </Card>
@@ -326,7 +352,7 @@ export default function Bookings() {
                 />
               </div>
             </div>
-            
+
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-48">
                 <Filter className="w-4 h-4 mr-2" />
@@ -356,9 +382,10 @@ export default function Bookings() {
             <div className="space-y-1">
               <div className="font-medium text-accent">Booking Rules</div>
               <div className="text-sm text-muted-foreground">
-                • Bookings can only be created within 7 days from today
-                • Modifications and cancellations require at least 12 hours notice before start time
-                • Only pending bookings can be modified or cancelled
+                • Bookings can only be created within 7 days from today •
+                Modifications and cancellations require at least 12 hours notice
+                before start time • Only pending bookings can be modified or
+                cancelled
               </div>
             </div>
           </div>
@@ -412,7 +439,9 @@ export default function Bookings() {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{startDateTime.date}</div>
+                          <div className="font-medium">
+                            {startDateTime.date}
+                          </div>
                           <div className="text-sm text-muted-foreground">
                             {startDateTime.time} - {endDateTime.time}
                           </div>
@@ -426,8 +455,8 @@ export default function Bookings() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => handleViewBooking(booking)}
                             className="gap-1"
@@ -435,11 +464,12 @@ export default function Bookings() {
                             <Eye className="w-3 h-3" />
                             View
                           </Button>
-                          
+
                           {/* Edit button for PENDING and APPROVED bookings */}
-                          {(booking.status === 'PENDING' || booking.status === 'APPROVED') && (
-                            <Button 
-                              variant="outline" 
+                          {(booking.status === "PENDING" ||
+                            booking.status === "APPROVED") && (
+                            <Button
+                              variant="outline"
                               size="sm"
                               onClick={() => handleEditBooking(booking)}
                               className="gap-1"
@@ -448,11 +478,11 @@ export default function Bookings() {
                               Edit
                             </Button>
                           )}
-                          
+
                           {/* Delete button for COMPLETED and CANCELLED bookings */}
                           {canDelete(booking) && (
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               size="sm"
                               onClick={() => handleDeleteBooking(booking)}
                               className="gap-1 text-destructive hover:text-destructive"
@@ -469,16 +499,15 @@ export default function Bookings() {
               </TableBody>
             </Table>
           </div>
-          
+
           {filteredBookings.length === 0 && (
             <div className="text-center py-12">
               <Calendar className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
               <div className="text-lg font-medium mb-2">No bookings found</div>
               <div className="text-muted-foreground mb-4">
-                {searchTerm || statusFilter !== "all" 
-                  ? "Try adjusting your search or filter criteria" 
-                  : "Create the first booking to get started"
-                }
+                {searchTerm || statusFilter !== "all"
+                  ? "Try adjusting your search or filter criteria"
+                  : "Create the first booking to get started"}
               </div>
               <Button variant="accent" onClick={() => setCreateModalOpen(true)}>
                 Create New Booking

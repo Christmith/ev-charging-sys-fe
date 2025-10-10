@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -44,11 +44,9 @@ import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Booking, EVOwner, EvOwnerDetailsApiResponse } from "@/types/entities";
+import { Booking, EVOwner } from "@/types/entities";
 import { ViewUserModal } from "./ViewUserModal";
-import { CreateOwnerModal } from "../owners/CreateOwnerModal";
 import { useToast } from "@/hooks/use-toast";
-import { evOwnerApi } from "@/services/api";
 
 const formSchema = z.object({
   ownerNIC: z.string().min(1, "NIC is required"),
@@ -168,10 +166,6 @@ export function CreateBookingModal({
   const [foundUser, setFoundUser] = useState<EVOwner | null>(null);
   const [userNotFound, setUserNotFound] = useState(false);
   const [showViewUserModal, setShowViewUserModal] = useState(false);
-  const [showCreateOwnerModal, setShowCreateOwnerModal] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const [apiOwnerDetails, setApiOwnerDetails] =
-    useState<EvOwnerDetailsApiResponse | null>(null);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -181,21 +175,12 @@ export function CreateBookingModal({
   const watchedNIC = form.watch("ownerNIC");
   const watchedFirstName = form.watch("firstName");
   const watchedLastName = form.watch("lastName");
-
-  // Clear user state when NIC changes
-  useEffect(() => {
-    if (watchedNIC && foundUser && foundUser.nic !== watchedNIC) {
-      setFoundUser(null);
-      setApiOwnerDetails(null);
-      setUserNotFound(false);
-    }
-  }, [watchedNIC, foundUser]);
   const selectedStation = mockStations.find(
     (station) => station.id === form.watch("stationId")
   );
   const selectedSlotType = form.watch("slotType");
 
-  const handleFindUser = async () => {
+  const handleFindUser = () => {
     if (!watchedNIC) {
       toast({
         title: "Error",
@@ -205,59 +190,27 @@ export function CreateBookingModal({
       return;
     }
 
-    try {
-      setIsSearching(true);
-      const ownerDetails = await evOwnerApi.getEvOwnerByNIC(watchedNIC);
-
-      // Split fullName into firstName and lastName
-      const nameParts = ownerDetails.fullName.trim().split(" ");
-      const firstName = nameParts[0] || "";
-      const lastName = nameParts.slice(1).join(" ") || "";
-
-      // Transform API response to EVOwner format for internal use
-      const transformedUser: EVOwner = {
-        nic: ownerDetails.nic,
-        firstName,
-        lastName,
-        phone: ownerDetails.phone,
-        email: ownerDetails.email,
-        addressLine1: ownerDetails.address,
-        addressLine2: undefined,
-        city: "", // Will be extracted from address if needed
-        vehicleModel: ownerDetails.vehicleModel,
-        vehiclePlate: ownerDetails.licensePlate,
-        status: ownerDetails.status,
-        createdAt: ownerDetails.createdAt,
-        updatedAt: ownerDetails.updatedAt,
-      };
-
-      setFoundUser(transformedUser);
-      setApiOwnerDetails(ownerDetails);
+    const user = globalMockEVOwners.find((owner) => owner.nic === watchedNIC);
+    if (user) {
+      setFoundUser(user);
       setUserNotFound(false);
-      form.setValue("firstName", firstName);
-      form.setValue("lastName", lastName);
-
+      form.setValue("firstName", user.firstName);
+      form.setValue("lastName", user.lastName);
       toast({
         title: "User Found",
-        description: `Found ${firstName} ${lastName}`,
+        description: `Found ${user.firstName} ${user.lastName}`,
       });
-    } catch (error) {
-      console.error("Failed to find user:", error);
+    } else {
       setFoundUser(null);
-      setApiOwnerDetails(null);
       setUserNotFound(true);
       form.setValue("firstName", "");
       form.setValue("lastName", "");
-
-      const errorMessage =
-        error instanceof Error ? error.message : "No user found with this NIC.";
       toast({
         title: "User Not Found",
-        description: errorMessage,
+        description:
+          "No user found with this NIC. Please fill in the details to add a new user.",
         variant: "destructive",
       });
-    } finally {
-      setIsSearching(false);
     }
   };
 
@@ -291,20 +244,6 @@ export function CreateBookingModal({
     toast({
       title: "User Added",
       description: `Successfully added ${newUser.firstName} ${newUser.lastName}`,
-    });
-  };
-
-  const handleCreateOwner = (newOwner: EVOwner) => {
-    // Update form with the newly created owner
-    form.setValue("ownerNIC", newOwner.nic);
-    form.setValue("firstName", newOwner.firstName);
-    form.setValue("lastName", newOwner.lastName);
-    setFoundUser(newOwner);
-    setUserNotFound(false);
-
-    toast({
-      title: "Success",
-      description: `EV Owner ${newOwner.firstName} ${newOwner.lastName} created successfully`,
     });
   };
 
@@ -395,10 +334,9 @@ export function CreateBookingModal({
                           variant="outline"
                           onClick={handleFindUser}
                           className="px-3"
-                          disabled={isSearching}
                         >
                           <Search className="w-4 h-4" />
-                          {isSearching ? "Searching..." : "Find User"}
+                          Find User
                         </Button>
                       </div>
                       <FormMessage />
@@ -406,74 +344,68 @@ export function CreateBookingModal({
                   )}
                 />
 
-                {/* First Name and Last Name Fields - Hidden when user not found */}
-                {!userNotFound && (
-                  <>
-                    <FormField
-                      control={form.control}
-                      name="firstName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>First Name</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Enter first name"
-                              {...field}
-                              disabled={!!foundUser}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                {/* First Name Field */}
+                <FormField
+                  control={form.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Enter first name"
+                          {...field}
+                          disabled={!!foundUser}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                    <FormField
-                      control={form.control}
-                      name="lastName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Last Name</FormLabel>
-                          <div className="flex gap-2">
-                            <FormControl>
-                              <Input
-                                placeholder="Enter last name"
-                                {...field}
-                                disabled={!!foundUser}
-                              />
-                            </FormControl>
-                            {foundUser && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setShowViewUserModal(true)}
-                                className="px-3"
-                              >
-                                <Eye className="w-4 h-4" />
-                                View User
-                              </Button>
-                            )}
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
-                )}
-
-                {/* Create User Button - Full width when user not found */}
-                {userNotFound && (
-                  <div className="w-full">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowCreateOwnerModal(true)}
-                      className="w-full gap-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Create New EV Owner
-                    </Button>
-                  </div>
-                )}
+                {/* Last Name Field with Action Button */}
+                <FormField
+                  control={form.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <div className="flex gap-2">
+                        <FormControl>
+                          <Input
+                            placeholder="Enter last name"
+                            {...field}
+                            disabled={!!foundUser}
+                          />
+                        </FormControl>
+                        {foundUser ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setShowViewUserModal(true)}
+                            className="px-3"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View User
+                          </Button>
+                        ) : userNotFound &&
+                          watchedFirstName &&
+                          watchedLastName ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleAddUser}
+                            className="px-3"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add User
+                          </Button>
+                        ) : null}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 {/* Station Selection */}
                 <FormField
@@ -758,12 +690,6 @@ export function CreateBookingModal({
         open={showViewUserModal}
         onOpenChange={setShowViewUserModal}
         user={foundUser}
-      />
-
-      <CreateOwnerModal
-        open={showCreateOwnerModal}
-        onOpenChange={setShowCreateOwnerModal}
-        onOwnerCreated={handleCreateOwner}
       />
     </>
   );

@@ -40,21 +40,6 @@ export interface EvOwnerApiResponse {
   updatedAt: string;
 }
 
-// API response structure for EV owner details (includes ID)
-export interface EvOwnerDetailsApiResponse {
-  id: string;
-  nic: string;
-  email: string;
-  fullName: string;
-  phone: string;
-  address: string;
-  vehicleModel?: string;
-  licensePlate?: string;
-  status: "Active" | "Deactivated";
-  createdAt: string;
-  updatedAt: string;
-}
-
 // Charging Station entity
 export interface Station {
   id: string;

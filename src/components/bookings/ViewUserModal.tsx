@@ -1,4 +1,9 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { User, Phone, Mail, MapPin, Car, Calendar } from "lucide-react";
 import { EVOwner } from "@/types/entities";
@@ -10,7 +15,11 @@ interface ViewUserModalProps {
   user: EVOwner | null;
 }
 
-export function ViewUserModal({ open, onOpenChange, user }: ViewUserModalProps) {
+export function ViewUserModal({
+  open,
+  onOpenChange,
+  user,
+}: ViewUserModalProps) {
   if (!user) return null;
 
   return (
@@ -28,11 +37,13 @@ export function ViewUserModal({ open, onOpenChange, user }: ViewUserModalProps) 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Basic Information</h3>
-              <Badge variant={user.status === 'ACTIVE' ? 'default' : 'secondary'}>
+              <Badge
+                variant={user.status === "Active" ? "default" : "secondary"}
+              >
                 {user.status}
               </Badge>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">NIC</p>
@@ -40,7 +51,9 @@ export function ViewUserModal({ open, onOpenChange, user }: ViewUserModalProps) 
               </div>
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Full Name</p>
-                <p className="font-medium">{user.firstName} {user.lastName}</p>
+                <p className="font-medium">
+                  {user.firstName} {user.lastName}
+                </p>
               </div>
             </div>
           </div>
@@ -51,7 +64,7 @@ export function ViewUserModal({ open, onOpenChange, user }: ViewUserModalProps) 
               <Phone className="w-4 h-4" />
               Contact Information
             </h3>
-            
+
             <div className="grid grid-cols-1 gap-4">
               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                 <Phone className="w-4 h-4 text-muted-foreground" />
@@ -60,7 +73,7 @@ export function ViewUserModal({ open, onOpenChange, user }: ViewUserModalProps) 
                   <p className="font-medium">{user.phone}</p>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                 <Mail className="w-4 h-4 text-muted-foreground" />
                 <div>
@@ -77,7 +90,7 @@ export function ViewUserModal({ open, onOpenChange, user }: ViewUserModalProps) 
               <MapPin className="w-4 h-4" />
               Address
             </h3>
-            
+
             <div className="p-3 rounded-lg bg-muted/50">
               <p className="font-medium">{user.addressLine1}</p>
               {user.addressLine2 && <p>{user.addressLine2}</p>}
@@ -92,17 +105,21 @@ export function ViewUserModal({ open, onOpenChange, user }: ViewUserModalProps) 
                 <Car className="w-4 h-4" />
                 Vehicle Information
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 {user.vehicleModel && (
                   <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Vehicle Model</p>
+                    <p className="text-sm text-muted-foreground">
+                      Vehicle Model
+                    </p>
                     <p className="font-medium">{user.vehicleModel}</p>
                   </div>
                 )}
                 {user.vehiclePlate && (
                   <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">License Plate</p>
+                    <p className="text-sm text-muted-foreground">
+                      License Plate
+                    </p>
                     <p className="font-medium">{user.vehiclePlate}</p>
                   </div>
                 )}
@@ -116,15 +133,19 @@ export function ViewUserModal({ open, onOpenChange, user }: ViewUserModalProps) 
               <Calendar className="w-4 h-4" />
               Account Information
             </h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Created At</p>
-                <p className="font-medium">{format(new Date(user.createdAt), "PPP")}</p>
+                <p className="font-medium">
+                  {format(new Date(user.createdAt), "PPP")}
+                </p>
               </div>
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Updated At</p>
-                <p className="font-medium">{format(new Date(user.updatedAt), "PPP")}</p>
+                <p className="font-medium">
+                  {format(new Date(user.updatedAt), "PPP")}
+                </p>
               </div>
             </div>
           </div>
