@@ -3,7 +3,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { CalendarIcon, Clock, MapPin, User, CheckCircle, XCircle } from "lucide-react";
+import {
+  CalendarIcon,
+  Clock,
+  MapPin,
+  User,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +47,8 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Booking } from "@/types/entities";
 import { ConfirmationDialog } from "./ConfirmationDialog";
+import { bookingApi } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
   ownerNIC: z.string().min(1, "EV Owner NIC is required"),
@@ -58,6 +67,7 @@ interface EditBookingModalProps {
   onOpenChange: (open: boolean) => void;
   booking: Booking | null;
   onUpdateBooking: (booking: Booking) => void;
+  onDeleteBooking?: (bookingId: string) => void;
 }
 
 // Mock data
@@ -77,17 +87,24 @@ const mockStations = [
 
 const timeSlots = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2);
-  const minute = i % 2 === 0 ? '00' : '30';
-  return `${hour.toString().padStart(2, '0')}:${minute}`;
+  const minute = i % 2 === 0 ? "00" : "30";
+  return `${hour.toString().padStart(2, "0")}:${minute}`;
 });
 
-export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking }: EditBookingModalProps) {
+export function EditBookingModal({
+  open,
+  onOpenChange,
+  booking,
+  onUpdateBooking,
+  onDeleteBooking,
+}: EditBookingModalProps) {
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
     description: string;
     action: () => void;
   } | null>(null);
+  const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -98,15 +115,15 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
     if (booking && open) {
       const startDate = new Date(booking.startAt);
       const endDate = new Date(booking.endAt);
-      
+
       form.reset({
         ownerNIC: booking.ownerNIC,
         stationId: booking.stationId,
-        slotType: booking.chargingSlot?.type || 'AC',
+        slotType: booking.chargingSlot?.type || "AC",
         date: startDate,
-        startTime: format(startDate, 'HH:mm'),
-        endTime: format(endDate, 'HH:mm'),
-        notes: booking.notes || '',
+        startTime: format(startDate, "HH:mm"),
+        endTime: format(endDate, "HH:mm"),
+        notes: booking.notes || "",
       });
     }
   }, [booking, open, form]);
@@ -120,16 +137,20 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
     return hoursDiff >= 12;
   };
 
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
-    const selectedOwner = mockEVOwners.find(owner => owner.nic === values.ownerNIC);
-    const selectedStation = mockStations.find(station => station.id === values.stationId);
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    const selectedOwner = mockEVOwners.find(
+      (owner) => owner.nic === values.ownerNIC
+    );
+    const selectedStation = mockStations.find(
+      (station) => station.id === values.stationId
+    );
 
     const startDateTime = new Date(values.date);
-    const [startHour, startMinute] = values.startTime.split(':');
+    const [startHour, startMinute] = values.startTime.split(":");
     startDateTime.setHours(parseInt(startHour), parseInt(startMinute), 0, 0);
 
     const endDateTime = new Date(values.date);
-    const [endHour, endMinute] = values.endTime.split(':');
+    const [endHour, endMinute] = values.endTime.split(":");
     endDateTime.setHours(parseInt(endHour), parseInt(endMinute), 0, 0);
 
     const updatedBooking: Booking = {
@@ -151,65 +172,154 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
     setConfirmDialog({
       open: true,
       title: "Update Booking",
-      description: "Are you sure you want to update this booking? The changes cannot be undone.",
-      action: () => {
-        onUpdateBooking(updatedBooking);
-        onOpenChange(false);
-        setConfirmDialog(null);
-      }
+      description:
+        "Are you sure you want to update this booking? The changes cannot be undone.",
+      action: async () => {
+        try {
+          // Prepare booking data for API
+          const bookingData = {
+            evOwnerId: "507f1f77bcf86cd799439012", // This should come from the actual EV owner data
+            stationId: values.stationId,
+            slotType: values.slotType,
+            slotId: booking.chargingSlot?.slotNumber?.toString() || "1",
+            startTime: startDateTime.toISOString(),
+            endTime: endDateTime.toISOString(),
+            vehicleModel: selectedOwner?.name, // This should be actual vehicle model
+            licensePlate: "N/A", // This should be actual license plate
+          };
+
+          // Call the API to update booking
+          await bookingApi.updateBooking(booking.id, bookingData);
+
+          // Show success message
+          toast({
+            title: "Booking Updated",
+            description: `Booking ${booking.id} has been updated successfully.`,
+          });
+
+          // Update local state
+          onUpdateBooking(updatedBooking);
+          onOpenChange(false);
+        } catch (error) {
+          console.error("Failed to update booking:", error);
+          toast({
+            title: "Error",
+            description: "Failed to update booking. Please try again.",
+            variant: "destructive",
+          });
+        } finally {
+          setConfirmDialog(null);
+        }
+      },
     });
   };
 
-  const handleStatusChange = (newStatus: Booking['status'], reason?: string) => {
+  const handleStatusChange = (
+    newStatus: Booking["status"],
+    reason?: string
+  ) => {
     const updatedBooking: Booking = {
       ...booking,
       status: newStatus,
       updatedAt: new Date().toISOString(),
-      ...(reason && { cancelReason: reason })
+      ...(reason && { cancelReason: reason }),
     };
 
-    const action = () => {
-      onUpdateBooking(updatedBooking);
-      onOpenChange(false);
-      setConfirmDialog(null);
+    const action = async () => {
+      try {
+        if (newStatus === "APPROVED") {
+          // Use API to approve booking
+          await bookingApi.approveBooking(booking.id);
+
+          toast({
+            title: "Booking Approved",
+            description: `Booking ${booking.id} has been approved successfully.`,
+          });
+        } else if (newStatus === "CANCELLED") {
+          // Use API to cancel booking (this deletes the booking from database)
+          await bookingApi.cancelBooking(booking.id);
+
+          toast({
+            title: "Booking Cancelled",
+            description: `Booking ${booking.id} has been cancelled and deleted successfully.`,
+          });
+
+          // Notify parent to remove booking from list
+          if (onDeleteBooking) {
+            onDeleteBooking(booking.id);
+          }
+
+          // Close modal since booking is deleted
+          onOpenChange(false);
+          return; // Don't update local state since booking is deleted
+        } else {
+          // For other status changes, show appropriate toast
+          const statusMessages = {
+            COMPLETED: "Booking marked as completed successfully.",
+            PENDING: "Booking status updated successfully.",
+          };
+
+          toast({
+            title: "Status Updated",
+            description:
+              statusMessages[newStatus] ||
+              "Booking status updated successfully.",
+          });
+        }
+
+        // Update local state
+        onUpdateBooking(updatedBooking);
+        onOpenChange(false);
+      } catch (error) {
+        console.error(`Failed to update booking status:`, error);
+        toast({
+          title: "Error",
+          description: `Failed to update booking status. Please try again.`,
+          variant: "destructive",
+        });
+      } finally {
+        setConfirmDialog(null);
+      }
     };
 
-    if (newStatus === 'COMPLETED') {
+    if (newStatus === "COMPLETED") {
       setConfirmDialog({
         open: true,
         title: "Mark as Completed",
-        description: "Are you sure you want to mark this booking as completed? This action cannot be undone.",
-        action
+        description:
+          "Are you sure you want to mark this booking as completed? This action cannot be undone.",
+        action,
       });
-    } else if (newStatus === 'CANCELLED') {
+    } else if (newStatus === "CANCELLED") {
       setConfirmDialog({
         open: true,
         title: "Cancel Booking",
-        description: "Are you sure you want to cancel this booking? This action cannot be undone.",
-        action
+        description:
+          "Are you sure you want to cancel this booking? This action cannot be undone.",
+        action,
       });
-    } else if (newStatus === 'APPROVED') {
+    } else if (newStatus === "APPROVED") {
       setConfirmDialog({
         open: true,
         title: "Approve Booking",
         description: "Are you sure you want to approve this booking?",
-        action
+        action,
       });
     }
   };
 
-  const getStatusColor = (status: Booking['status']) => {
+  const getStatusColor = (status: Booking["status"]) => {
     switch (status) {
-      case 'PENDING':
-        return 'bg-warning/10 text-warning border-warning/20';
-      case 'APPROVED':
-        return 'bg-success/10 text-success border-success/20';
-      case 'COMPLETED':
-        return 'bg-accent/10 text-accent border-accent/20';
-      case 'CANCELLED':
-        return 'bg-muted text-muted-foreground border-muted/20';
+      case "PENDING":
+        return "bg-warning/10 text-warning border-warning/20";
+      case "APPROVED":
+        return "bg-success/10 text-success border-success/20";
+      case "COMPLETED":
+        return "bg-accent/10 text-accent border-accent/20";
+      case "CANCELLED":
+        return "bg-muted text-muted-foreground border-muted/20";
       default:
-        return 'bg-muted text-muted-foreground border-muted/20';
+        return "bg-muted text-muted-foreground border-muted/20";
     }
   };
 
@@ -228,9 +338,14 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
             {/* Current Status */}
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-muted-foreground">Booking ID: {booking.id}</div>
+                <div className="text-sm text-muted-foreground">
+                  Booking ID: {booking.id}
+                </div>
               </div>
-              <Badge variant="outline" className={getStatusColor(booking.status)}>
+              <Badge
+                variant="outline"
+                className={getStatusColor(booking.status)}
+              >
                 {booking.status.toLowerCase()}
               </Badge>
             </div>
@@ -238,32 +353,37 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
             {!canModifyBooking() && (
               <div className="bg-destructive/10 p-3 rounded-lg border border-destructive/20">
                 <div className="text-sm text-destructive">
-                  <div className="font-medium">This booking cannot be updated or cancelled</div>
+                  <div className="font-medium">
+                    This booking cannot be updated or cancelled
+                  </div>
                   <div className="text-xs mt-1">
-                    Reservations can only be modified or cancelled at least 12 hours before the booking start time.
+                    Reservations can only be modified or cancelled at least 12
+                    hours before the booking start time.
                   </div>
                 </div>
               </div>
             )}
 
             {/* Status Actions */}
-            {booking.status === 'PENDING' && (
+            {booking.status === "PENDING" && (
               <div className="space-y-3">
                 <h4 className="font-medium">Status Actions</h4>
                 <div className="flex gap-2">
-                  <Button 
-                    variant="success" 
-                    size="sm" 
-                    onClick={() => handleStatusChange('APPROVED')}
+                  <Button
+                    variant="success"
+                    size="sm"
+                    onClick={() => handleStatusChange("APPROVED")}
                     className="gap-2"
                   >
                     <CheckCircle className="w-4 h-4" />
                     Approve
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleStatusChange('CANCELLED', 'Cancelled by admin')}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      handleStatusChange("CANCELLED", "Cancelled by admin")
+                    }
                     className="gap-2 text-destructive hover:text-destructive"
                     disabled={!canModifyBooking()}
                   >
@@ -274,23 +394,28 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
               </div>
             )}
 
-            {booking.status === 'APPROVED' && (
+            {booking.status === "APPROVED" && (
               <div className="space-y-3">
                 <h4 className="font-medium">Status Actions</h4>
                 <div className="flex gap-2">
-                  <Button 
-                    variant="accent" 
-                    size="sm" 
-                    onClick={() => handleStatusChange('COMPLETED')}
+                  <Button
+                    variant="accent"
+                    size="sm"
+                    onClick={() => handleStatusChange("COMPLETED")}
                     className="gap-2"
                   >
                     <CheckCircle className="w-4 h-4" />
                     Complete
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleStatusChange('CANCELLED', 'Cancelled after approval')}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      handleStatusChange(
+                        "CANCELLED",
+                        "Cancelled after approval"
+                      )
+                    }
                     className="gap-2 text-destructive hover:text-destructive"
                     disabled={!canModifyBooking()}
                   >
@@ -306,7 +431,10 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
             {/* Edit Form - only show if can modify */}
             {canModifyBooking() && (
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-6"
+                >
                   <div className="grid gap-6">
                     {/* EV Owner Selection */}
                     <FormField
@@ -318,7 +446,10 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
                             <User className="w-4 h-4" />
                             EV Owner
                           </FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select EV owner" />
@@ -328,8 +459,12 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
                               {mockEVOwners.map((owner) => (
                                 <SelectItem key={owner.nic} value={owner.nic}>
                                   <div className="flex flex-col items-start">
-                                    <span className="font-medium">{owner.name}</span>
-                                    <span className="text-sm text-muted-foreground">{owner.nic}</span>
+                                    <span className="font-medium">
+                                      {owner.name}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                      {owner.nic}
+                                    </span>
                                   </div>
                                 </SelectItem>
                               ))}
@@ -350,7 +485,10 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
                             <MapPin className="w-4 h-4" />
                             Charging Station
                           </FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select charging station" />
@@ -360,8 +498,13 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
                               {mockStations.map((station) => (
                                 <SelectItem key={station.id} value={station.id}>
                                   <div className="flex flex-col items-start">
-                                    <span className="font-medium">{station.name}</span>
-                                    <span className="text-sm text-muted-foreground">AC: {station.acSlots} | DC: {station.dcSlots}</span>
+                                    <span className="font-medium">
+                                      {station.name}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                      AC: {station.acSlots} | DC:{" "}
+                                      {station.dcSlots}
+                                    </span>
                                   </div>
                                 </SelectItem>
                               ))}
@@ -382,7 +525,10 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
                             <MapPin className="w-4 h-4" />
                             Charging Slot Type
                           </FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select slot type" />
@@ -391,14 +537,22 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
                             <SelectContent>
                               <SelectItem value="AC">
                                 <div className="flex flex-col items-start">
-                                  <span className="font-medium">AC Charging</span>
-                                  <span className="text-sm text-muted-foreground">Slower charging (Type 2)</span>
+                                  <span className="font-medium">
+                                    AC Charging
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">
+                                    Slower charging (Type 2)
+                                  </span>
                                 </div>
                               </SelectItem>
                               <SelectItem value="DC">
                                 <div className="flex flex-col items-start">
-                                  <span className="font-medium">DC Fast Charging</span>
-                                  <span className="text-sm text-muted-foreground">Rapid charging (CCS/CHAdeMO)</span>
+                                  <span className="font-medium">
+                                    DC Fast Charging
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">
+                                    Rapid charging (CCS/CHAdeMO)
+                                  </span>
                                 </div>
                               </SelectItem>
                             </SelectContent>
@@ -437,13 +591,20 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
+                            <PopoverContent
+                              className="w-auto p-0"
+                              align="start"
+                            >
                               <Calendar
                                 mode="single"
                                 selected={field.value}
                                 onSelect={field.onChange}
                                 disabled={(date) =>
-                                  date < new Date() || date > new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                                  date < new Date() ||
+                                  date >
+                                    new Date(
+                                      Date.now() + 7 * 24 * 60 * 60 * 1000
+                                    )
                                 }
                                 initialFocus
                                 className={cn("p-3 pointer-events-auto")}
@@ -463,7 +624,10 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Start Time</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select start time" />
@@ -488,7 +652,10 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>End Time</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select end time" />
@@ -529,7 +696,11 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
                   </div>
 
                   <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => onOpenChange(false)}
+                    >
                       Cancel
                     </Button>
                     <Button type="submit" variant="accent">
@@ -542,7 +713,11 @@ export function EditBookingModal({ open, onOpenChange, booking, onUpdateBooking 
 
             {!canModifyBooking() && (
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
                   Close
                 </Button>
               </DialogFooter>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,6 +17,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -34,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Popover,
   PopoverContent,
@@ -42,16 +44,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Booking, EVOwner } from "@/types/entities";
+import {
+  Booking,
+  EVOwner,
+  EvOwnerDetailsResponse,
+  StationApiResponse,
+  SlotAvailabilityResponse,
+  BookingCreationResponse,
+} from "@/types/entities";
 import { ViewUserModal } from "./ViewUserModal";
+import { CreateOwnerModal } from "@/components/owners/CreateOwnerModal";
 import { useToast } from "@/hooks/use-toast";
+import { evOwnerApi, stationApi, bookingApi } from "@/services/api";
 
 const formSchema = z.object({
   ownerNIC: z.string().min(1, "NIC is required"),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
   stationId: z.string().min(1, "Station is required"),
   slotType: z.enum(["AC", "DC"]),
   date: z.date({
@@ -59,7 +67,6 @@ const formSchema = z.object({
   }),
   startTime: z.string().min(1, "Start time is required"),
   endTime: z.string().min(1, "End time is required"),
-  notes: z.string().optional(),
 });
 
 interface CreateBookingModalProps {
@@ -70,7 +77,7 @@ interface CreateBookingModalProps {
   ) => void;
 }
 
-// Mock data for EV owners
+// Mock data for EV owners - keeping for backward compatibility
 const mockEVOwners: EVOwner[] = [
   {
     nic: "123456789V",
@@ -132,25 +139,7 @@ const mockEVOwners: EVOwner[] = [
 // Create a global mock EV owners array for this session
 const globalMockEVOwners = [...mockEVOwners];
 
-const mockStations = [
-  { id: "station-1", name: "Central Station", acSlots: 4, dcSlots: 2 },
-  { id: "station-2", name: "Mall Parking", acSlots: 6, dcSlots: 3 },
-  { id: "station-3", name: "Airport Terminal", acSlots: 8, dcSlots: 4 },
-  { id: "station-4", name: "City Plaza", acSlots: 5, dcSlots: 2 },
-];
-
-// Function to get next available slot
-const getNextAvailableSlot = (
-  stationId: string,
-  slotType: "AC" | "DC"
-): number => {
-  const station = mockStations.find((s) => s.id === stationId);
-  if (!station) return 1;
-
-  const totalSlots = slotType === "AC" ? station.acSlots : station.dcSlots;
-  // For demo purposes, return a random available slot
-  return Math.floor(Math.random() * totalSlots) + 1;
-};
+// Stations are fetched from API (getAllStationsForAssignment)
 
 const timeSlots = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2);
@@ -166,6 +155,18 @@ export function CreateBookingModal({
   const [foundUser, setFoundUser] = useState<EVOwner | null>(null);
   const [userNotFound, setUserNotFound] = useState(false);
   const [showViewUserModal, setShowViewUserModal] = useState(false);
+  const [showCreateOwnerModal, setShowCreateOwnerModal] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [notFoundMessage, setNotFoundMessage] = useState("");
+  const [stations, setStations] = useState<
+    Array<{ id: string; name: string; acSlots: number; dcSlots: number }>
+  >([]);
+  const [stationsLoading, setStationsLoading] = useState(false);
+  const [slotAvailability, setSlotAvailability] =
+    useState<SlotAvailabilityResponse | null>(null);
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
+  const [selectedSlotId, setSelectedSlotId] = useState<string>("");
+  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -173,14 +174,56 @@ export function CreateBookingModal({
   });
 
   const watchedNIC = form.watch("ownerNIC");
-  const watchedFirstName = form.watch("firstName");
-  const watchedLastName = form.watch("lastName");
-  const selectedStation = mockStations.find(
+  const selectedStation = stations.find(
     (station) => station.id === form.watch("stationId")
   );
   const selectedSlotType = form.watch("slotType");
 
-  const handleFindUser = () => {
+  // Fetch stations for assignment when modal opens
+  useEffect(() => {
+    if (!open) return;
+    const fetchStations = async () => {
+      try {
+        setStationsLoading(true);
+        const data: StationApiResponse[] =
+          await stationApi.getAllStationsForAssignment();
+        const mapped = (data || []).map((s) => ({
+          id: s.id,
+          name: s.stationName,
+          acSlots: Number(
+            s.acChargingSlots ??
+              (Array.isArray(s.acSlots) ? s.acSlots.length : 0)
+          ),
+          dcSlots: Number(
+            s.dcChargingSlots ??
+              (Array.isArray(s.dcSlots) ? s.dcSlots.length : 0)
+          ),
+        }));
+        setStations(mapped);
+      } catch (e: unknown) {
+        toast({
+          title: "Failed to load stations",
+          description: (e as Error)?.message || "Could not fetch stations list",
+          variant: "destructive",
+        });
+      } finally {
+        setStationsLoading(false);
+      }
+    };
+    fetchStations();
+  }, [open, toast]);
+
+  const getNextAvailableSlot = (
+    stationId: string,
+    slotType: "AC" | "DC"
+  ): number => {
+    const station = stations.find((s) => s.id === stationId);
+    const totalSlots =
+      slotType === "AC" ? station?.acSlots ?? 1 : station?.dcSlots ?? 1;
+    return Math.max(1, Math.floor(Math.random() * totalSlots) + 1);
+  };
+
+  const handleFindUser = async () => {
     if (!watchedNIC) {
       toast({
         title: "Error",
@@ -190,79 +233,211 @@ export function CreateBookingModal({
       return;
     }
 
-    const user = globalMockEVOwners.find((owner) => owner.nic === watchedNIC);
-    if (user) {
+    try {
+      setIsSearching(true);
+      setNotFoundMessage("");
+
+      const response: EvOwnerDetailsResponse = await evOwnerApi.getEvOwnerByNIC(
+        watchedNIC
+      );
+
+      // Split fullName into firstName and lastName
+      const nameParts = response.fullName.trim().split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+
+      // Convert API response to EVOwner format
+      const user: EVOwner = {
+        nic: response.nic,
+        firstName,
+        lastName,
+        phone: response.phone,
+        email: response.email,
+        addressLine1: response.address,
+        addressLine2: "",
+        city: "",
+        vehicleModel: response.vehicleModel,
+        vehiclePlate: response.licensePlate,
+        status: response.status,
+        createdAt: response.createdAt,
+        updatedAt: response.updatedAt,
+      };
+
       setFoundUser(user);
       setUserNotFound(false);
-      form.setValue("firstName", user.firstName);
-      form.setValue("lastName", user.lastName);
+
       toast({
         title: "User Found",
-        description: `Found ${user.firstName} ${user.lastName}`,
+        description: `Found ${response.fullName}`,
       });
-    } else {
+    } catch (error: unknown) {
+      console.error("Error finding user:", error);
+
       setFoundUser(null);
       setUserNotFound(true);
-      form.setValue("firstName", "");
-      form.setValue("lastName", "");
+
+      // Check if it's a 404 error (user not found)
+      const isAxiosError =
+        error && typeof error === "object" && "response" in error;
+      const axiosError = isAxiosError
+        ? (error as {
+            response?: { status?: number; data?: { message?: string } };
+          })
+        : null;
+
+      if (
+        axiosError?.response?.status === 404 ||
+        axiosError?.response?.data?.message?.includes("not found")
+      ) {
+        const errorMessage =
+          axiosError?.response?.data?.message ||
+          "EV Owner not found with the provided NIC.";
+        setNotFoundMessage(errorMessage);
       toast({
         title: "User Not Found",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      } else {
+        // For other errors, still show the create user option
+        const errorMessage =
+          axiosError?.response?.data?.message ||
+          (error as Error)?.message ||
+          "Failed to search for user. You can still create a new user.";
+        setNotFoundMessage(errorMessage);
+        toast({
+          title: "Search Error",
         description:
-          "No user found with this NIC. Please fill in the details to add a new user.",
+            "Failed to search for user. You can still create a new user.",
         variant: "destructive",
       });
     }
+    } finally {
+      setIsSearching(false);
+    }
   };
 
-  const handleAddUser = () => {
-    if (!watchedNIC || !watchedFirstName || !watchedLastName) {
+  const handleCreateUser = () => {
+    setShowCreateOwnerModal(true);
+  };
+
+  const handleOwnerCreated = (newOwner: EVOwner) => {
+    setFoundUser(newOwner);
+    setUserNotFound(false);
+    setNotFoundMessage("");
+    setShowCreateOwnerModal(false);
+  };
+
+  const handleCheckAvailability = async () => {
+    const formValues = form.getValues();
+
+    // Validate required fields
+    if (!foundUser) {
       toast({
         title: "Error",
-        description: "Please fill in NIC, first name, and last name",
+        description: "Please find or create a user first",
         variant: "destructive",
       });
       return;
     }
 
-    const newUser: EVOwner = {
-      nic: watchedNIC,
-      firstName: watchedFirstName,
-      lastName: watchedLastName,
-      phone: "000-000-0000", // Placeholder
-      email: "temp@email.com", // Placeholder
-      addressLine1: "Address not provided",
-      city: "Not specified",
-      status: "Active",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    if (
+      !formValues.stationId ||
+      !formValues.slotType ||
+      !formValues.date ||
+      !formValues.startTime ||
+      !formValues.endTime
+    ) {
+      toast({
+        title: "Error",
+        description:
+          "Please fill in all required fields (station, slot type, date, and times)",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    globalMockEVOwners.push(newUser);
-    setFoundUser(newUser);
-    setUserNotFound(false);
+    try {
+      setIsCheckingAvailability(true);
+      setSlotAvailability(null);
+      setSelectedSlotId("");
 
+      // Create start and end datetime strings
+      const startDateTime = new Date(formValues.date);
+      const [startHour, startMinute] = formValues.startTime.split(":");
+      startDateTime.setHours(parseInt(startHour), parseInt(startMinute), 0, 0);
+
+      const endDateTime = new Date(formValues.date);
+      const [endHour, endMinute] = formValues.endTime.split(":");
+      endDateTime.setHours(parseInt(endHour), parseInt(endMinute), 0, 0);
+
+      // For now, we'll use a placeholder evOwnerId and slotId
+      // In a real implementation, you'd get these from the API or form
+      const availabilityData = {
+        evOwnerId: "507f1f77bcf86cd799439012", // This should come from the found user
+        stationId: formValues.stationId,
+        slotType: formValues.slotType,
+        slotId: `${formValues.slotType}1`, // Placeholder slot ID
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        vehicleModel: foundUser.vehicleModel,
+        licensePlate: foundUser.vehiclePlate,
+      };
+
+      const response: SlotAvailabilityResponse =
+        await bookingApi.checkAvailability(availabilityData);
+      setSlotAvailability(response);
+
+      if (response.isAvailable) {
+        toast({
+          title: "Slots Available",
+          description: response.message,
+        });
+      } else {
+        toast({
+          title: "No Slots Available",
+          description: response.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error: unknown) {
+      console.error("Error checking availability:", error);
     toast({
-      title: "User Added",
-      description: `Successfully added ${newUser.firstName} ${newUser.lastName}`,
-    });
+        title: "Error",
+        description: "Failed to check slot availability. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCheckingAvailability(false);
+    }
   };
 
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
-    const selectedOwner =
-      foundUser ||
-      globalMockEVOwners.find((owner) => owner.nic === values.ownerNIC);
-    const selectedStation = mockStations.find(
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    const selectedOwner = foundUser;
+    const selectedStation = stations.find(
       (station) => station.id === values.stationId
     );
 
     if (!selectedOwner) {
       toast({
         title: "Error",
-        description: "Please find or add the user first",
+        description: "Please find or create the user first",
         variant: "destructive",
       });
       return;
     }
+
+    if (!selectedSlotId) {
+      toast({
+        title: "Error",
+        description: "Please select a slot first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsCreatingBooking(true);
 
     const startDateTime = new Date(values.date);
     const [startHour, startMinute] = values.startTime.split(":");
@@ -272,9 +447,30 @@ export function CreateBookingModal({
     const [endHour, endMinute] = values.endTime.split(":");
     endDateTime.setHours(parseInt(endHour), parseInt(endMinute), 0, 0);
 
-    // Automatically assign charging slot
-    const slotNumber = getNextAvailableSlot(values.stationId, values.slotType);
+      // Prepare booking data for API
+      const bookingData = {
+        evOwnerId: "507f1f77bcf86cd799439012", // This should come from the found user
+        stationId: values.stationId,
+        slotType: values.slotType,
+        slotId: selectedSlotId,
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        vehicleModel: selectedOwner.vehicleModel,
+        licensePlate: selectedOwner.vehiclePlate,
+      };
 
+      // Call the API to create booking
+      const response: BookingCreationResponse = await bookingApi.createBooking(
+        bookingData
+      );
+
+      // Show success message
+      toast({
+        title: "Booking Created",
+        description: response.message,
+      });
+
+      // Create local booking object for the parent component
     const newBooking: Omit<Booking, "id" | "createdAt" | "updatedAt"> = {
       ownerNIC: values.ownerNIC,
       ownerName: `${selectedOwner.firstName} ${selectedOwner.lastName}`,
@@ -282,20 +478,35 @@ export function CreateBookingModal({
       stationName: selectedStation?.name,
       chargingSlot: {
         type: values.slotType,
-        slotNumber: slotNumber,
+          slotNumber: parseInt(selectedSlotId.replace(/\D/g, "")), // Extract number from slot ID
       },
-      status: "PENDING",
+        status: "APPROVED", // Based on the API response message
       startAt: startDateTime.toISOString(),
       endAt: endDateTime.toISOString(),
       createdByUserId: "current-user",
-      notes: values.notes,
     };
 
+      // Call parent callback
     onCreateBooking(newBooking);
+
+      // Reset form and close modal
     form.reset();
     setFoundUser(null);
     setUserNotFound(false);
+      setNotFoundMessage("");
+      setSlotAvailability(null);
+      setSelectedSlotId("");
     onOpenChange(false);
+    } catch (error: unknown) {
+      console.error("Error creating booking:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create booking. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingBooking(false);
+    }
   };
 
   return (
@@ -307,6 +518,9 @@ export function CreateBookingModal({
               <Clock className="w-5 h-5 text-accent" />
               Create New Booking
             </DialogTitle>
+            <DialogDescription>
+              Create a new charging session booking for an EV owner.
+            </DialogDescription>
           </DialogHeader>
 
           <Form {...form}>
@@ -334,9 +548,10 @@ export function CreateBookingModal({
                           variant="outline"
                           onClick={handleFindUser}
                           className="px-3"
+                          disabled={isSearching}
                         >
                           <Search className="w-4 h-4" />
-                          Find User
+                          {isSearching ? "Searching..." : "Find User"}
                         </Button>
                       </div>
                       <FormMessage />
@@ -344,68 +559,56 @@ export function CreateBookingModal({
                   )}
                 />
 
-                {/* First Name Field */}
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Enter first name"
-                          {...field}
-                          disabled={!!foundUser}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Last Name Field with Action Button */}
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last Name</FormLabel>
-                      <div className="flex gap-2">
-                        <FormControl>
-                          <Input
-                            placeholder="Enter last name"
-                            {...field}
-                            disabled={!!foundUser}
-                          />
-                        </FormControl>
-                        {foundUser ? (
+                {/* User Found Display */}
+                {foundUser && (
+                  <div className="bg-success/10 border border-success/20 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-success font-medium text-sm">
+                          User Found
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {foundUser.firstName} {foundUser.lastName} (
+                          {foundUser.nic})
+                        </p>
+                      </div>
                           <Button
                             type="button"
                             variant="outline"
                             onClick={() => setShowViewUserModal(true)}
                             className="px-3"
                           >
-                            <Eye className="w-4 h-4" />
+                        <Eye className="w-4 h-4 mr-2" />
                             View User
                           </Button>
-                        ) : userNotFound &&
-                          watchedFirstName &&
-                          watchedLastName ? (
+                    </div>
+                  </div>
+                )}
+
+                {/* User Not Found Message */}
+                {userNotFound && notFoundMessage && (
+                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-destructive font-medium text-sm">
+                          User Not Found
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {notFoundMessage}
+                        </p>
+                      </div>
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={handleAddUser}
+                        onClick={handleCreateUser}
                             className="px-3"
                           >
-                            <Plus className="w-4 h-4" />
+                        <Plus className="w-4 h-4 mr-2" />
                             Add User
                           </Button>
-                        ) : null}
+                    </div>
                       </div>
-                      <FormMessage />
-                    </FormItem>
                   )}
-                />
 
                 {/* Station Selection */}
                 <FormField
@@ -427,7 +630,12 @@ export function CreateBookingModal({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {mockStations.map((station) => (
+                          {stationsLoading ? (
+                            <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                              Loading stations...
+                            </div>
+                          ) : stations.length > 0 ? (
+                            stations.map((station) => (
                             <SelectItem key={station.id} value={station.id}>
                               <div className="flex flex-col items-start">
                                 <span className="font-medium">
@@ -439,7 +647,12 @@ export function CreateBookingModal({
                                 </span>
                               </div>
                             </SelectItem>
-                          ))}
+                            ))
+                          ) : (
+                            <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                              No stations available
+                            </div>
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -608,24 +821,72 @@ export function CreateBookingModal({
                   />
                 </div>
 
-                {/* Notes */}
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Notes (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Add any special instructions or notes..."
-                          className="resize-none"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Check Slot Availability Button */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleCheckAvailability}
+                  disabled={isCheckingAvailability}
+                >
+                  {isCheckingAvailability
+                    ? "Checking..."
+                    : "Check Slot Availability"}
+                </Button>
+
+                {/* Slot Availability Results */}
+                {slotAvailability && (
+                  <div className="space-y-4">
+                    {slotAvailability.isAvailable ? (
+                      <div className="bg-success/10 border border-success/20 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <p className="text-success font-medium text-sm">
+                              Slots Available
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {slotAvailability.message}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Available Slots Radio Buttons */}
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Select a slot:</p>
+                          <RadioGroup
+                            value={selectedSlotId}
+                            onValueChange={setSelectedSlotId}
+                            className="grid grid-cols-2 gap-2"
+                          >
+                            {slotAvailability.availableSlotIds.map((slotId) => (
+                              <div
+                                key={slotId}
+                                className="flex items-center space-x-2 p-2 border rounded-lg cursor-pointer hover:bg-muted/50"
+                              >
+                                <RadioGroupItem value={slotId} id={slotId} />
+                                <label
+                                  htmlFor={slotId}
+                                  className="text-sm font-medium cursor-pointer"
+                                >
+                                  {slotId}
+                                </label>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                        <p className="text-destructive font-medium text-sm">
+                          No Slots Available
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {slotAvailability.message}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Booking Summary */}
                 {(foundUser || selectedStation || form.watch("date")) && (
@@ -677,8 +938,17 @@ export function CreateBookingModal({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" variant="accent">
-                  Create Booking
+                <Button
+                  type="submit"
+                  variant="accent"
+                  disabled={
+                    !foundUser ||
+                    !slotAvailability?.isAvailable ||
+                    !selectedSlotId ||
+                    isCreatingBooking
+                  }
+                >
+                  {isCreatingBooking ? "Creating..." : "Create Booking"}
                 </Button>
               </DialogFooter>
             </form>
@@ -690,6 +960,12 @@ export function CreateBookingModal({
         open={showViewUserModal}
         onOpenChange={setShowViewUserModal}
         user={foundUser}
+      />
+
+      <CreateOwnerModal
+        open={showCreateOwnerModal}
+        onOpenChange={setShowCreateOwnerModal}
+        onOwnerCreated={handleOwnerCreated}
       />
     </>
   );

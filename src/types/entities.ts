@@ -40,6 +40,21 @@ export interface EvOwnerApiResponse {
   updatedAt: string;
 }
 
+// API response structure for EV owner details (with id)
+export interface EvOwnerDetailsResponse {
+  id: string;
+  nic: string;
+  email: string;
+  fullName: string;
+  phone: string;
+  address: string;
+  vehicleModel?: string;
+  licensePlate?: string;
+  status: "Active" | "Deactivated";
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Charging Station entity
 export interface Station {
   id: string;
@@ -131,6 +146,26 @@ export interface Booking {
   notes?: string;
 }
 
+// API response structure for booking (from backend)
+export interface BookingApiResponse {
+  id: string;
+  evOwnerId: string;
+  evOwnerName: string;
+  evOwnerNIC: string;
+  stationId: string;
+  stationName: string;
+  stationCode: string;
+  startTime: string; // ISO datetime
+  endTime: string; // ISO datetime
+  slotType: "AC" | "DC";
+  slotId: string | null;
+  status: "Pending" | "Approved" | "Completed" | "Cancelled";
+  qrCodeBase64: string;
+  bookingDate: string; // ISO datetime
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Dashboard KPI data
 export interface DashboardStats {
   pendingReservations: number;
@@ -183,4 +218,16 @@ export interface StationFilters {
   type?: "AC" | "DC";
   city?: string;
   operatorUserId?: string;
+}
+
+// Slot availability check response
+export interface SlotAvailabilityResponse {
+  isAvailable: boolean;
+  availableSlotIds: string[];
+  message: string;
+}
+
+// Booking creation response
+export interface BookingCreationResponse {
+  message: string;
 }

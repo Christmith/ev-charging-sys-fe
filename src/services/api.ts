@@ -208,6 +208,96 @@ export const evOwnerApi = {
     });
     return response.data;
   },
+
+  // Get EV owner details by NIC
+  getEvOwnerByNIC: async (nic: string) => {
+    const response = await api.get(`/evowners/details/${nic}`);
+    return response.data;
+  },
+};
+
+// Booking API functions
+export const bookingApi = {
+  // Check slot availability
+  checkAvailability: async (availabilityData: {
+    evOwnerId: string;
+    stationId: string;
+    slotType: "AC" | "DC";
+    slotId: string;
+    startTime: string;
+    endTime: string;
+    vehicleModel?: string;
+    licensePlate?: string;
+  }) => {
+    const response = await api.post(
+      "/Booking/check-availability",
+      availabilityData
+    );
+    return response.data;
+  },
+
+  // Create a new booking
+  createBooking: async (bookingData: {
+    evOwnerId: string;
+    stationId: string;
+    slotType: "AC" | "DC";
+    slotId: string;
+    startTime: string;
+    endTime: string;
+    vehicleModel?: string;
+    licensePlate?: string;
+  }) => {
+    const response = await api.post("/booking", bookingData);
+    return response.data;
+  },
+
+  // Get all bookings for Backoffice
+  getAllBookings: async () => {
+    const response = await api.get("/Booking/all");
+    return response.data;
+  },
+
+  // Get bookings by station for StationOperator
+  getBookingsByStation: async (stationId: string) => {
+    const response = await api.get(`/Booking/station/${stationId}`);
+    return response.data;
+  },
+
+  // Approve a booking
+  approveBooking: async (bookingId: string) => {
+    const response = await api.post(`/Booking/${bookingId}/approve`);
+    return response.data;
+  },
+
+  // Cancel/Delete a booking
+  cancelBooking: async (bookingId: string) => {
+    const response = await api.delete(`/Booking/${bookingId}`);
+    return response.data;
+  },
+
+  // Permanently delete a booking
+  permanentlyDeleteBooking: async (bookingId: string) => {
+    const response = await api.delete(`/Booking/${bookingId}/permanent`);
+    return response.data;
+  },
+
+  // Update a booking
+  updateBooking: async (
+    bookingId: string,
+    bookingData: {
+      evOwnerId: string;
+      stationId: string;
+      slotType: "AC" | "DC";
+      slotId: string;
+      startTime: string;
+      endTime: string;
+      vehicleModel?: string;
+      licensePlate?: string;
+    }
+  ) => {
+    const response = await api.put(`/Booking/${bookingId}`, bookingData);
+    return response.data;
+  },
 };
 
 export default api;
