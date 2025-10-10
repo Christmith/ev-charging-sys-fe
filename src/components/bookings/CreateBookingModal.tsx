@@ -170,7 +170,8 @@ export function CreateBookingModal({
   const [showViewUserModal, setShowViewUserModal] = useState(false);
   const [showCreateOwnerModal, setShowCreateOwnerModal] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  const [apiOwnerDetails, setApiOwnerDetails] = useState<EvOwnerDetailsApiResponse | null>(null);
+  const [apiOwnerDetails, setApiOwnerDetails] =
+    useState<EvOwnerDetailsApiResponse | null>(null);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -207,11 +208,11 @@ export function CreateBookingModal({
     try {
       setIsSearching(true);
       const ownerDetails = await evOwnerApi.getEvOwnerByNIC(watchedNIC);
-      
+
       // Split fullName into firstName and lastName
-      const nameParts = ownerDetails.fullName.trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
+      const nameParts = ownerDetails.fullName.trim().split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
 
       // Transform API response to EVOwner format for internal use
       const transformedUser: EVOwner = {
@@ -222,7 +223,7 @@ export function CreateBookingModal({
         email: ownerDetails.email,
         addressLine1: ownerDetails.address,
         addressLine2: undefined,
-        city: '', // Will be extracted from address if needed
+        city: "", // Will be extracted from address if needed
         vehicleModel: ownerDetails.vehicleModel,
         vehiclePlate: ownerDetails.licensePlate,
         status: ownerDetails.status,
@@ -235,7 +236,7 @@ export function CreateBookingModal({
       setUserNotFound(false);
       form.setValue("firstName", firstName);
       form.setValue("lastName", lastName);
-      
+
       toast({
         title: "User Found",
         description: `Found ${firstName} ${lastName}`,
@@ -247,8 +248,9 @@ export function CreateBookingModal({
       setUserNotFound(true);
       form.setValue("firstName", "");
       form.setValue("lastName", "");
-      
-      const errorMessage = error instanceof Error ? error.message : "No user found with this NIC.";
+
+      const errorMessage =
+        error instanceof Error ? error.message : "No user found with this NIC.";
       toast({
         title: "User Not Found",
         description: errorMessage,
@@ -299,7 +301,7 @@ export function CreateBookingModal({
     form.setValue("lastName", newOwner.lastName);
     setFoundUser(newOwner);
     setUserNotFound(false);
-    
+
     toast({
       title: "Success",
       description: `EV Owner ${newOwner.firstName} ${newOwner.lastName} created successfully`,
